@@ -378,8 +378,6 @@ async def main():
 📊 <b>配置信息:</b>
 • 监控账号: @{Config.TWITTER_USERNAME}
 • 检查间隔: {Config.CHECK_INTERVAL}秒
-• 自动欢迎: 已启用
-• 定时业务介绍: 每3小时整点
 
 
 🎉 <b>系统状态:</b> 运行中"""
