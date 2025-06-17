@@ -7,9 +7,9 @@ TeleLuX - Twitter监控和Telegram通知系统
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, MessageHandler, ChatMemberHandler, filters, ContextTypes
 from config import Config
 from twitter_monitor import TwitterMonitor
 from database import Database
@@ -32,6 +32,7 @@ class TeleLuXBot:
         self.twitter_monitor = None
         self.database = None
         self.last_check_time = None
+        self.last_business_intro_time = None
         
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理收到的消息"""
@@ -154,7 +155,38 @@ class TeleLuXBot:
                 
         except Exception as e:
             logger.error(f"处理消息时发生错误: {e}")
-    
+
+    async def handle_chat_member(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """处理群组成员变化"""
+        try:
+            chat_member_update = update.chat_member
+            chat_id = chat_member_update.chat.id
+
+            # 只处理目标群组的成员变化
+            if str(chat_id) != str(self.chat_id):
+                return
+
+            old_status = chat_member_update.old_chat_member.status
+            new_status = chat_member_update.new_chat_member.status
+            user = chat_member_update.new_chat_member.user
+
+            # 检查是否有新用户加入
+            if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator', 'creator']:
+                user_name = user.first_name or user.username or "新朋友"
+
+                welcome_message = f"欢迎 <b>{self._escape_html(user_name)}</b> 光临露老师的聊天群 🎉"
+
+                await context.bot.send_message(
+                    chat_id=self.chat_id,
+                    text=welcome_message,
+                    parse_mode='HTML'
+                )
+
+                logger.info(f"👋 发送欢迎消息给新用户: {user_name} (ID: {user.id})")
+
+        except Exception as e:
+            logger.error(f"处理群组成员变化时发生错误: {e}")
+
     def _escape_html(self, text):
         """转义HTML特殊字符"""
         if not text:
@@ -217,7 +249,63 @@ class TeleLuXBot:
                 
         except Exception as e:
             logger.error(f"定期检查推文失败: {e}")
-    
+
+    async def check_business_intro_schedule(self):
+        """检查是否需要发送定时业务介绍"""
+        try:
+            now = datetime.now()
+
+            # 检查是否到了整点时间（每3小时：0, 3, 6, 9, 12, 15, 18, 21点）
+            if now.hour % 3 == 0 and now.minute == 0:
+                # 避免重复发送（在同一分钟内）
+                if (self.last_business_intro_time and
+                    (now - self.last_business_intro_time).total_seconds() < 60):
+                    return
+
+                business_intro_message = """🌟 <b>露老师业务介绍</b> 🌟
+
+小助理下单机器人： 👉https://t.me/Lulaoshi_bot
+
+※平台是自助入群，机器人下单即可。
+
+如果不太会使用平台，或者遇到任何问题，可以私信我，或者私信露老师截图扫码支付：@mteacherlu。
+
+除门槛相关露老师个人电报私信不接受闲聊，禁砍价，不强迫入门，也请保持基本礼貌，感谢理解。
+
+<b>注意事项：</b>
+1.露老师不做线下服务，如果有线下相关问题，请私信我询问。
+2.因个人原因退群后不再重新拉群，还请注意一下。
+3.支付过程中如有任何问题，也欢迎私信我，我会尽力帮助。
+
+感谢大家的配合和支持！✨
+
+---------------------------------------------------
+
+<b>相关群组与定制介绍：</b>
+
+<b>日常群：</b>稳定更新，露老师个人原创作品，会更新长视频以及多量照片，都是推特所看不到的内容。
+
+<b>女女群：</b>稳定更新，除露老师外还可以看到另外几位女主，露老师与其他女主合作视频等。
+
+<b>三视角群：</b>不定期更新，每次活动拍摄由男友视角随心拍摄。
+
+<b>定制视频：</b>根据需求定制露老师视频，可SOLO、FM、FF、FFM、FMM，可按要求使用各种玩具和剧情设计。
+
+※希望得到更详细介绍询问请私信"""
+
+                await self.application.bot.send_message(
+                    chat_id=self.chat_id,
+                    text=business_intro_message,
+                    parse_mode='HTML',
+                    disable_web_page_preview=True
+                )
+
+                self.last_business_intro_time = now
+                logger.info(f"📢 定时发送业务介绍 (时间: {now.strftime('%H:%M')})")
+
+        except Exception as e:
+            logger.error(f"定时业务介绍发送失败: {e}")
+
     async def start_bot(self):
         """启动机器人"""
         try:
@@ -230,6 +318,10 @@ class TeleLuXBot:
             # 添加消息处理器 - 处理所有文本消息
             message_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message)
             self.application.add_handler(message_handler)
+
+            # 添加群组成员变化处理器
+            chat_member_handler = ChatMemberHandler(self.handle_chat_member, ChatMemberHandler.CHAT_MEMBER)
+            self.application.add_handler(chat_member_handler)
             
             # 启动机器人
             await self.application.initialize()
@@ -286,7 +378,15 @@ async def main():
 📊 <b>配置信息:</b>
 • 监控账号: @{Config.TWITTER_USERNAME}
 • 检查间隔: {Config.CHECK_INTERVAL}秒
+• 自动欢迎: 已启用
+• 定时业务介绍: 每3小时整点
 
+💡 <b>功能说明:</b>
+1. 自动监控推文并发送通知
+2. 在群组中发送任意消息，机器人会自动回复最新推文
+3. 私聊机器人发送'27'，会向群组发送业务介绍
+4. 新用户加入时自动发送欢迎消息
+5. 每3小时整点自动发送业务介绍
 
 🎉 <b>系统状态:</b> 运行中"""
         
@@ -303,6 +403,10 @@ async def main():
             while True:
                 # 定期检查推文
                 await bot.check_tweets_periodically()
+
+                # 检查定时业务介绍
+                await bot.check_business_intro_schedule()
+
                 await asyncio.sleep(1)
         except KeyboardInterrupt:
             logger.info("\n⏹️  收到停止信号")
