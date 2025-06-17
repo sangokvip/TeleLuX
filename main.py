@@ -47,7 +47,7 @@ class TeleLuXBot:
             # 处理私聊消息
             if chat_type == 'private':
                 if message_text == "27":
-                    special_message = """小助理下单机器人： 👉https://t.me/Lulaoshi_bot 
+                    special_message = """小助理下单机器人： 👉https://t.me/Lulaoshi_bot
 
 ※平台是自助入群，机器人下单即可。
 
@@ -75,7 +75,7 @@ class TeleLuXBot:
 定制视频：根据需求定制露老师视频，可SOLO、FM、FF、FFM、FMM，可按要求使用各种玩具和剧情设计。
 
 ※希望得到更详细介绍询问请私信"""
-                    
+
                     # 发送到配置的群组
                     await context.bot.send_message(
                         chat_id=self.chat_id,
@@ -83,20 +83,104 @@ class TeleLuXBot:
                         parse_mode='HTML',
                         disable_web_page_preview=True
                     )
-                    
+
                     # 给私聊用户发送确认消息
                     await context.bot.send_message(
                         chat_id=chat_id,
                         text="✅ 已向群组发送相关信息",
                         parse_mode='HTML'
                     )
-                    
+
                     logger.info(f"🎉 收到私聊触发词'27'，已向群组发送业务介绍消息 (来自用户: {user_name})")
+
+                elif message_text.lower() == "x":
+                    # 处理私信触发推送最新3条推文
+                    if self.twitter_monitor:
+                        username = Config.TWITTER_USERNAME
+                        logger.info(f"私信触发，获取 @{username} 的最新3条推文...")
+
+                        try:
+                            latest_tweets = self.twitter_monitor.get_latest_tweets(username, count=3)
+
+                            if latest_tweets:
+                                # 发送标题消息
+                                header_message = f"📱 <b>@{username} 最新3条推文</b>\n\n由 <b>{self._escape_html(user_name)}</b> 私信触发推送"
+
+                                await context.bot.send_message(
+                                    chat_id=self.chat_id,
+                                    text=header_message,
+                                    parse_mode='HTML'
+                                )
+
+                                # 逐条发送推文
+                                for i, tweet in enumerate(latest_tweets, 1):
+                                    tweet_message = f"""
+🐦 <b>推文 {i}/3</b>
+
+📝 <b>内容:</b> {self._escape_html(tweet['text'])}
+🕒 <b>时间:</b> {tweet['created_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}
+
+🔗 <a href="{tweet['url']}">查看原推文</a>
+                                    """.strip()
+
+                                    await context.bot.send_message(
+                                        chat_id=self.chat_id,
+                                        text=tweet_message,
+                                        parse_mode='HTML',
+                                        disable_web_page_preview=False
+                                    )
+
+                                    # 推文之间稍作延迟，避免发送过快
+                                    await asyncio.sleep(1)
+
+                                # 给私聊用户发送确认消息
+                                await context.bot.send_message(
+                                    chat_id=chat_id,
+                                    text="✅ 已向群组推送最新3条推文",
+                                    parse_mode='HTML'
+                                )
+
+                                logger.info(f"🎉 收到私聊触发词'x'，已向群组推送最新3条推文 (来自用户: {user_name})")
+                            else:
+                                # 没有获取到推文
+                                await context.bot.send_message(
+                                    chat_id=self.chat_id,
+                                    text=f"⚠️ 暂时无法获取 @{username} 的推文",
+                                    parse_mode='HTML'
+                                )
+
+                                await context.bot.send_message(
+                                    chat_id=chat_id,
+                                    text="❌ 获取推文失败，请稍后再试",
+                                    parse_mode='HTML'
+                                )
+
+                        except Exception as e:
+                            logger.error(f"私信触发获取推文失败: {e}")
+
+                            await context.bot.send_message(
+                                chat_id=self.chat_id,
+                                text="⚠️ 获取推文时发生错误",
+                                parse_mode='HTML'
+                            )
+
+                            await context.bot.send_message(
+                                chat_id=chat_id,
+                                text="❌ 获取推文时发生错误，请稍后再试",
+                                parse_mode='HTML'
+                            )
+                    else:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="❌ Twitter监控服务未初始化",
+                            parse_mode='HTML'
+                        )
+
                 else:
                     # 对其他私聊消息给予提示
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text="👋 你好！如需发送业务介绍到群组，请发送 '27'",
+                        text="👋 你好！\n\n💡 可用指令：\n• 发送 '27' - 向群组发送业务介绍\n• 发送 'x' - 向群组推送最新3条推文",
                         parse_mode='HTML'
                     )
                     logger.info(f"收到私聊消息'{message_text}'，已回复提示信息 (来自用户: {user_name})")
@@ -378,7 +462,12 @@ async def main():
 📊 <b>配置信息:</b>
 • 监控账号: @{Config.TWITTER_USERNAME}
 • 检查间隔: {Config.CHECK_INTERVAL}秒
+• 自动欢迎: 已启用
+• 定时业务介绍: 每3小时整点
 
+💡 <b>私聊指令:</b>
+• 发送 '27' - 向群组发送业务介绍
+• 发送 'x' - 向群组推送最新3条推文
 
 🎉 <b>系统状态:</b> 运行中"""
         
@@ -388,7 +477,7 @@ async def main():
             parse_mode='HTML'
         )
         
-        logger.info("💡 现在可以私聊机器人发送'27'或在群组发送消息测试功能！")
+        logger.info("💡 现在可以私聊机器人发送'27'(业务介绍)或'x'(推送3条推文)，或在群组发送消息测试功能！")
         
         # 保持运行并定期检查推文
         try:
