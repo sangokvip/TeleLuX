@@ -94,17 +94,17 @@ class TeleLuXBot:
                     logger.info(f"🎉 收到私聊触发词'27'，已向群组发送业务介绍消息 (来自用户: {user_name})")
 
                 elif message_text.lower() == "x":
-                    # 处理私信触发推送最新3条推文
+                    # 处理私信触发推送最新3条推文（过去一周内）
                     if self.twitter_monitor:
                         username = Config.TWITTER_USERNAME
-                        logger.info(f"私信触发，获取 @{username} 的最新3条推文...")
+                        logger.info(f"私信触发，获取 @{username} 过去一周内的最新3条推文...")
 
                         try:
-                            latest_tweets = self.twitter_monitor.get_latest_tweets(username, count=3)
+                            latest_tweets = self.twitter_monitor.get_recent_tweets(username, count=3, days=7)
 
                             if latest_tweets:
                                 # 发送标题消息
-                                header_message = f"📱 <b>@{username} 最新3条推文</b>\n\n由 <b>{self._escape_html(user_name)}</b> 私信触发推送"
+                                header_message = f"📱 <b>@{username} 过去一周内最新3条推文</b>\n\n由 <b>{self._escape_html(user_name)}</b> 私信触发推送"
 
                                 await context.bot.send_message(
                                     chat_id=self.chat_id,
@@ -202,10 +202,10 @@ class TeleLuXBot:
             elif str(chat_id) == str(self.chat_id):
                 if self.twitter_monitor:
                     username = Config.TWITTER_USERNAME
-                    logger.info(f"群组消息触发，获取 @{username} 的最新推文...")
-                    
+                    logger.info(f"群组消息触发，获取 @{username} 过去一周内的最新推文...")
+
                     try:
-                        latest_tweets = self.twitter_monitor.get_latest_tweets(username, count=1)
+                        latest_tweets = self.twitter_monitor.get_recent_tweets(username, count=1, days=7)
                         
                         if latest_tweets:
                             tweet = latest_tweets[0]
@@ -326,8 +326,23 @@ class TeleLuXBot:
             logger.info("执行定时推文检查...")
             self.last_check_time = datetime.now()
             
-            # 检查新推文
-            new_tweets = self.twitter_monitor.check_new_tweets(Config.TWITTER_USERNAME)
+            # 检查新推文（过去一周内）
+            username = Config.TWITTER_USERNAME
+            recent_tweets = self.twitter_monitor.get_recent_tweets(username, count=5, days=7)
+
+            # 检查哪些是新推文
+            new_tweets = []
+            for tweet in recent_tweets:
+                if not self.twitter_monitor.database.is_tweet_processed(str(tweet['id'])):
+                    new_tweets.append(tweet)
+                    # 标记为已处理
+                    self.twitter_monitor.database.mark_tweet_processed(
+                        str(tweet['id']),
+                        tweet['username'],
+                        tweet['url'],
+                        tweet['text'],
+                        tweet['created_at']
+                    )
             
             # 发送通知
             for tweet in new_tweets:
