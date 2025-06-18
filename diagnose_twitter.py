@@ -33,19 +33,34 @@ def test_twitter_api():
     }
     
     try:
-        # 测试基本连接
+        # 测试基本连接 - 使用公开端点
+        test_url = f"https://api.twitter.com/2/users/by/username/{Config.TWITTER_USERNAME}"
         response = requests.get(
-            'https://api.twitter.com/2/users/me',
+            test_url,
             headers=headers,
             timeout=10
         )
-        
+
         if response.status_code == 200:
             print("✅ API连接正常")
         else:
             print(f"❌ API连接失败: {response.status_code}")
             print(f"   响应: {response.text}")
-            return False
+
+            # 如果是403错误，尝试使用v1.1 API
+            if response.status_code == 403:
+                print("⚠️  尝试使用Twitter API v1.1...")
+                v1_url = f"https://api.twitter.com/1.1/users/show.json?screen_name={Config.TWITTER_USERNAME}"
+                v1_response = requests.get(v1_url, headers=headers, timeout=10)
+
+                if v1_response.status_code == 200:
+                    print("✅ Twitter API v1.1连接正常")
+                    return True
+                else:
+                    print(f"❌ Twitter API v1.1也失败: {v1_response.status_code}")
+                    return False
+            else:
+                return False
             
     except Exception as e:
         print(f"❌ 网络连接失败: {e}")
