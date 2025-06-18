@@ -158,15 +158,29 @@ class TeleLuXBot:
                         except Exception as e:
                             logger.error(f"私信触发获取推文失败: {e}")
 
+                            # 根据错误类型提供不同的提示
+                            if "429" in str(e) or "rate limit" in str(e).lower():
+                                group_msg = "⚠️ Twitter API速率限制，请稍后再试"
+                                private_msg = "❌ Twitter API速率限制，请等待15分钟后重试"
+                            elif "timeout" in str(e).lower() or "connection" in str(e).lower():
+                                group_msg = "⚠️ 网络连接超时，请稍后再试"
+                                private_msg = "❌ 网络连接超时，请稍后再试"
+                            elif "unauthorized" in str(e).lower() or "401" in str(e):
+                                group_msg = "⚠️ Twitter API认证失败"
+                                private_msg = "❌ Twitter API认证失败，请联系管理员"
+                            else:
+                                group_msg = f"⚠️ 获取推文时发生错误: {str(e)[:50]}"
+                                private_msg = f"❌ 获取推文失败: {str(e)[:50]}"
+
                             await context.bot.send_message(
                                 chat_id=self.chat_id,
-                                text="⚠️ 获取推文时发生错误",
+                                text=group_msg,
                                 parse_mode='HTML'
                             )
 
                             await context.bot.send_message(
                                 chat_id=chat_id,
-                                text="❌ 获取推文时发生错误，请稍后再试",
+                                text=private_msg,
                                 parse_mode='HTML'
                             )
                     else:
@@ -222,9 +236,20 @@ class TeleLuXBot:
                             )
                     except Exception as e:
                         logger.error(f"获取推文失败: {e}")
+
+                        # 根据错误类型提供不同的提示
+                        if "429" in str(e) or "rate limit" in str(e).lower():
+                            error_msg = "⚠️ Twitter API速率限制，请稍后再试"
+                        elif "timeout" in str(e).lower() or "connection" in str(e).lower():
+                            error_msg = "⚠️ 网络连接超时，请稍后再试"
+                        elif "unauthorized" in str(e).lower() or "401" in str(e):
+                            error_msg = "⚠️ Twitter API认证失败，请检查配置"
+                        else:
+                            error_msg = f"⚠️ 获取推文时发生错误: {str(e)[:100]}"
+
                         await context.bot.send_message(
                             chat_id=self.chat_id,
-                            text="⚠️ 获取推文时发生错误",
+                            text=error_msg,
                             parse_mode='HTML'
                         )
                 else:
