@@ -93,100 +93,86 @@ class TeleLuXBot:
 
                     logger.info(f"🎉 收到私聊触发词'27'，已向群组发送业务介绍消息 (来自用户: {user_name})")
 
-                elif message_text.lower() == "x":
-                    # 处理私信触发推送最新3条推文（过去一周内）
+                elif self._is_twitter_url(message_text):
+                    # 处理私信发送的Twitter URL
                     if self.twitter_monitor:
-                        username = Config.TWITTER_USERNAME
-                        logger.info(f"私信触发，获取 @{username} 过去一周内的最新3条推文...")
+                        logger.info(f"收到Twitter URL: {message_text}")
 
                         try:
-                            latest_tweets = self.twitter_monitor.get_recent_tweets(username, count=3, days=7)
+                            # 从URL提取推文ID
+                            tweet_id = self._extract_tweet_id(message_text)
+                            if not tweet_id:
+                                await context.bot.send_message(
+                                    chat_id=chat_id,
+                                    text="❌ 无法识别的Twitter URL格式",
+                                    parse_mode='HTML'
+                                )
+                                return
 
-                            if latest_tweets:
-                                # 发送标题消息
-                                header_message = f"📱 <b>@{username} 过去一周内最新3条推文</b>\n\n由 <b>{self._escape_html(user_name)}</b> 私信触发推送"
+                            # 获取推文详情
+                            tweet_info = self.twitter_monitor.get_tweet_by_id(tweet_id)
+
+                            if tweet_info:
+                                # 发送到群组
+                                tweet_message = f"""
+🐦 <b>推文分享</b>
+
+👤 <b>用户:</b> @{tweet_info['username']}
+📝 <b>内容:</b> {self._escape_html(tweet_info['text'])}
+🕒 <b>时间:</b> {tweet_info['created_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}
+
+🔗 <a href="{tweet_info['url']}">查看原推文</a>
+
+<i>由 <b>{self._escape_html(user_name)}</b> 分享</i>
+                                """.strip()
 
                                 await context.bot.send_message(
                                     chat_id=self.chat_id,
-                                    text=header_message,
-                                    parse_mode='HTML'
+                                    text=tweet_message,
+                                    parse_mode='HTML',
+                                    disable_web_page_preview=False
                                 )
-
-                                # 逐条发送推文
-                                for i, tweet in enumerate(latest_tweets, 1):
-                                    tweet_message = f"""
-🐦 <b>推文 {i}/3</b>
-
-📝 <b>内容:</b> {self._escape_html(tweet['text'])}
-🕒 <b>时间:</b> {tweet['created_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}
-
-🔗 <a href="{tweet['url']}">查看原推文</a>
-                                    """.strip()
-
-                                    await context.bot.send_message(
-                                        chat_id=self.chat_id,
-                                        text=tweet_message,
-                                        parse_mode='HTML',
-                                        disable_web_page_preview=False
-                                    )
-
-                                    # 推文之间稍作延迟，避免发送过快
-                                    await asyncio.sleep(1)
 
                                 # 给私聊用户发送确认消息
                                 await context.bot.send_message(
                                     chat_id=chat_id,
-                                    text="✅ 已向群组推送最新3条推文",
+                                    text="✅ 已向群组分享该推文",
                                     parse_mode='HTML'
                                 )
 
-                                logger.info(f"🎉 收到私聊触发词'x'，已向群组推送最新3条推文 (来自用户: {user_name})")
+                                logger.info(f"🎉 成功分享推文到群组 (推文ID: {tweet_id}, 来自用户: {user_name})")
                             else:
-                                # 没有获取到推文
-                                await context.bot.send_message(
-                                    chat_id=self.chat_id,
-                                    text=f"⚠️ 暂时无法获取 @{username} 的推文",
-                                    parse_mode='HTML'
-                                )
-
+                                # 无法获取推文
                                 await context.bot.send_message(
                                     chat_id=chat_id,
-                                    text="❌ 获取推文失败，请稍后再试",
+                                    text="❌ 无法获取该推文，可能是私密推文或推文不存在",
                                     parse_mode='HTML'
                                 )
 
                         except Exception as e:
-                            logger.error(f"私信触发获取推文失败: {e}")
+                            logger.error(f"处理Twitter URL失败: {e}")
 
                             # 根据错误类型提供不同的提示
                             if "429" in str(e) or "rate limit" in str(e).lower():
-                                group_msg = "⚠️ Twitter API速率限制，请稍后再试"
-                                private_msg = "❌ Twitter API速率限制，请等待15分钟后重试"
+                                error_msg = "❌ Twitter API速率限制，请等待15分钟后重试"
                             elif "timeout" in str(e).lower() or "connection" in str(e).lower():
-                                group_msg = "⚠️ 网络连接超时，请稍后再试"
-                                private_msg = "❌ 网络连接超时，请稍后再试"
+                                error_msg = "❌ 网络连接超时，请稍后再试"
                             elif "unauthorized" in str(e).lower() or "401" in str(e):
-                                group_msg = "⚠️ Twitter API认证失败"
-                                private_msg = "❌ Twitter API认证失败，请联系管理员"
+                                error_msg = "❌ Twitter API认证失败，请联系管理员"
+                            elif "not found" in str(e).lower() or "404" in str(e):
+                                error_msg = "❌ 推文不存在或已被删除"
                             else:
-                                group_msg = f"⚠️ 获取推文时发生错误: {str(e)[:50]}"
-                                private_msg = f"❌ 获取推文失败: {str(e)[:50]}"
-
-                            await context.bot.send_message(
-                                chat_id=self.chat_id,
-                                text=group_msg,
-                                parse_mode='HTML'
-                            )
+                                error_msg = f"❌ 处理推文失败: {str(e)[:50]}"
 
                             await context.bot.send_message(
                                 chat_id=chat_id,
-                                text=private_msg,
+                                text=error_msg,
                                 parse_mode='HTML'
                             )
                     else:
                         await context.bot.send_message(
                             chat_id=chat_id,
-                            text="❌ Twitter监控服务未初始化",
+                            text="❌ Twitter服务未初始化",
                             parse_mode='HTML'
                         )
 
@@ -194,70 +180,14 @@ class TeleLuXBot:
                     # 对其他私聊消息给予提示
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text="👋 你好！\n\n💡 可用指令：\n• 发送 '27' - 向群组发送业务介绍\n• 发送 'x' - 向群组推送最新3条推文",
+                        text="👋 你好！\n\n💡 可用功能：\n• 发送 '27' - 向群组发送业务介绍\n• 发送 Twitter URL - 分享推文到群组\n\n📝 支持的URL格式：\n• https://twitter.com/用户名/status/推文ID\n• https://x.com/用户名/status/推文ID",
                         parse_mode='HTML'
                     )
                     logger.info(f"收到私聊消息'{message_text}'，已回复提示信息 (来自用户: {user_name})")
-            # 处理群组消息（获取最新推文）
+            # 处理群组消息
             elif str(chat_id) == str(self.chat_id):
-                if self.twitter_monitor:
-                    username = Config.TWITTER_USERNAME
-                    logger.info(f"群组消息触发，获取 @{username} 过去一周内的最新推文...")
-
-                    try:
-                        latest_tweets = self.twitter_monitor.get_recent_tweets(username, count=1, days=7)
-                        
-                        if latest_tweets:
-                            tweet = latest_tweets[0]
-                            
-                            # 发送最新推文
-                            message = f"""
-🐦 <b>@{username} 的最新推文</b>
-
-📝 <b>内容:</b> {self._escape_html(tweet['text'])}
-🕒 <b>时间:</b> {tweet['created_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}
-
-🔗 <a href="{tweet['url']}">查看原推文</a>
-                            """.strip()
-                            
-                            await context.bot.send_message(
-                                chat_id=self.chat_id,
-                                text=message,
-                                parse_mode='HTML',
-                                disable_web_page_preview=False
-                            )
-                            
-                            logger.info("成功发送最新推文")
-                        else:
-                            await context.bot.send_message(
-                                chat_id=self.chat_id,
-                                text=f"⚠️ 暂时无法获取 @{username} 的推文",
-                                parse_mode='HTML'
-                            )
-                    except Exception as e:
-                        logger.error(f"获取推文失败: {e}")
-
-                        # 根据错误类型提供不同的提示
-                        if "429" in str(e) or "rate limit" in str(e).lower():
-                            error_msg = "⚠️ Twitter API速率限制，请稍后再试"
-                        elif "timeout" in str(e).lower() or "connection" in str(e).lower():
-                            error_msg = "⚠️ 网络连接超时，请稍后再试"
-                        elif "unauthorized" in str(e).lower() or "401" in str(e):
-                            error_msg = "⚠️ Twitter API认证失败，请检查配置"
-                        else:
-                            error_msg = f"⚠️ 获取推文时发生错误: {str(e)[:100]}"
-
-                        await context.bot.send_message(
-                            chat_id=self.chat_id,
-                            text=error_msg,
-                            parse_mode='HTML'
-                        )
-                else:
-                    await context.bot.send_message(
-                        chat_id=self.chat_id,
-                        text="⚠️ Twitter监控服务未初始化",
-                        parse_mode='HTML'
-                    )
+                # 群组消息不再触发推文获取，只记录日志
+                logger.info(f"收到群组消息: '{message_text}' 来自: {user_name}")
             else:
                 # 忽略其他群组的消息
                 logger.info(f"忽略来自其他群组的消息: {chat_id}")
@@ -310,69 +240,41 @@ class TeleLuXBot:
         }
         
         return "".join(html_escape_table.get(c, c) for c in text)
+
+    def _is_twitter_url(self, text):
+        """检查文本是否包含Twitter URL"""
+        import re
+
+        # Twitter URL模式
+        twitter_patterns = [
+            r'https?://(?:www\.)?twitter\.com/\w+/status/\d+',
+            r'https?://(?:www\.)?x\.com/\w+/status/\d+',
+            r'twitter\.com/\w+/status/\d+',
+            r'x\.com/\w+/status/\d+'
+        ]
+
+        for pattern in twitter_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                return True
+        return False
+
+    def _extract_tweet_id(self, url):
+        """从Twitter URL中提取推文ID"""
+        import re
+
+        # 提取推文ID的模式
+        patterns = [
+            r'(?:twitter|x)\.com/\w+/status/(\d+)',
+            r'/status/(\d+)'
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, url, re.IGNORECASE)
+            if match:
+                return match.group(1)
+        return None
     
-    async def check_tweets_periodically(self):
-        """定期检查推文"""
-        try:
-            if not self.last_check_time:
-                self.last_check_time = datetime.now()
-                return
-            
-            # 检查是否到了检查时间（每50分钟检查一次）
-            time_diff = (datetime.now() - self.last_check_time).total_seconds()
-            if time_diff < Config.CHECK_INTERVAL:
-                return
-            
-            logger.info("执行定时推文检查...")
-            self.last_check_time = datetime.now()
-            
-            # 检查新推文（过去一周内）
-            username = Config.TWITTER_USERNAME
-            recent_tweets = self.twitter_monitor.get_recent_tweets(username, count=5, days=7)
 
-            # 检查哪些是新推文
-            new_tweets = []
-            for tweet in recent_tweets:
-                if not self.twitter_monitor.database.is_tweet_processed(str(tweet['id'])):
-                    new_tweets.append(tweet)
-                    # 标记为已处理
-                    self.twitter_monitor.database.mark_tweet_processed(
-                        str(tweet['id']),
-                        tweet['username'],
-                        tweet['url'],
-                        tweet['text'],
-                        tweet['created_at']
-                    )
-            
-            # 发送通知
-            for tweet in new_tweets:
-                message = f"""
-🐦 <b>新推文通知</b>
-
-👤 <b>用户:</b> @{tweet['username']}
-📝 <b>内容:</b> {self._escape_html(tweet['text'])}
-🕒 <b>时间:</b> {tweet['created_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}
-
-🔗 <a href="{tweet['url']}">查看原推文</a>
-                """.strip()
-                
-                await self.application.bot.send_message(
-                    chat_id=self.chat_id,
-                    text=message,
-                    parse_mode='HTML',
-                    disable_web_page_preview=False
-                )
-                
-                logger.info(f"✅ 推文通知发送成功: {tweet['url']}")
-            
-            # 记录检查结果
-            if new_tweets:
-                logger.info(f"🎉 本次检查发现并处理了 {len(new_tweets)} 条新推文")
-            else:
-                logger.info("📊 本次检查未发现新推文")
-                
-        except Exception as e:
-            logger.error(f"定期检查推文失败: {e}")
 
     async def check_business_intro_schedule(self):
         """检查是否需要发送定时业务介绍"""
@@ -497,17 +399,20 @@ async def main():
         await bot.start_bot()
         
         # 发送启动通知
-        startup_message = f"""🚀 TeleLuX完整版已启动！
+        startup_message = f"""🚀 TeleLuX推文分享版已启动！
 
-📊 <b>配置信息:</b>
-• 监控账号: @{Config.TWITTER_USERNAME}
-• 检查间隔: {Config.CHECK_INTERVAL}秒
-• 自动欢迎: 已启用
+📊 <b>功能说明:</b>
+• 自动欢迎新用户
 • 定时业务介绍: 每3小时整点
+• Twitter推文分享功能
 
-💡 <b>私聊指令:</b>
+💡 <b>私聊功能:</b>
 • 发送 '27' - 向群组发送业务介绍
-• 发送 'x' - 向群组推送最新3条推文
+• 发送 Twitter URL - 分享推文到群组
+
+📝 <b>支持的URL格式:</b>
+• https://twitter.com/用户名/status/推文ID
+• https://x.com/用户名/status/推文ID
 
 🎉 <b>系统状态:</b> 运行中"""
         
@@ -517,18 +422,15 @@ async def main():
             parse_mode='HTML'
         )
         
-        logger.info("💡 现在可以私聊机器人发送'27'(业务介绍)或'x'(推送3条推文)，或在群组发送消息测试功能！")
+        logger.info("💡 现在可以私聊机器人发送'27'(业务介绍)或Twitter URL(分享推文)！")
         
-        # 保持运行并定期检查推文
+        # 保持运行并定期检查定时业务介绍
         try:
             while True:
-                # 定期检查推文
-                await bot.check_tweets_periodically()
-
                 # 检查定时业务介绍
                 await bot.check_business_intro_schedule()
 
-                await asyncio.sleep(1)
+                await asyncio.sleep(60)  # 每分钟检查一次定时任务
         except KeyboardInterrupt:
             logger.info("\n⏹️  收到停止信号")
         finally:

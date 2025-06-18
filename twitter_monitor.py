@@ -232,6 +232,53 @@ class TwitterMonitor:
         except Exception as e:
             logger.error(f"获取指定时间范围推文失败: {e}")
             return []
+
+    def get_tweet_by_id(self, tweet_id):
+        """根据推文ID获取推文详情"""
+        try:
+            logger.info(f"获取推文详情: {tweet_id}")
+
+            # 获取推文信息
+            tweet = self.client.get_tweet(
+                id=tweet_id,
+                tweet_fields=['created_at', 'public_metrics', 'author_id'],
+                user_fields=['username', 'name'],
+                expansions=['author_id']
+            )
+
+            if not tweet.data:
+                logger.error(f"推文不存在: {tweet_id}")
+                return None
+
+            # 获取作者信息
+            author_username = "unknown"
+            if tweet.includes and 'users' in tweet.includes:
+                for user in tweet.includes['users']:
+                    if user.id == tweet.data.author_id:
+                        author_username = user.username
+                        break
+
+            tweet_info = {
+                'id': tweet.data.id,
+                'text': tweet.data.text,
+                'created_at': tweet.data.created_at,
+                'url': f"https://twitter.com/{author_username}/status/{tweet.data.id}",
+                'username': author_username,
+                'author_id': tweet.data.author_id
+            }
+
+            logger.info(f"成功获取推文: @{author_username} - {tweet.data.text[:50]}...")
+            return tweet_info
+
+        except tweepy.NotFound:
+            logger.error(f"推文不存在或已被删除: {tweet_id}")
+            return None
+        except tweepy.Unauthorized:
+            logger.error(f"无权访问推文: {tweet_id}")
+            return None
+        except Exception as e:
+            logger.error(f"获取推文详情失败: {e}")
+            return None
     
     def check_new_tweets(self, username):
         """检查新推文"""
