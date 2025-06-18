@@ -9,7 +9,24 @@ cd "$PROJECT_DIR"
 echo "1. 停止服务..."
 sudo systemctl stop telex.service
 
-echo "2. 运行Twitter API诊断..."
+echo "2. 检查并激活虚拟环境..."
+if [ -d "venv" ]; then
+    echo "✅ 虚拟环境存在"
+    source venv/bin/activate
+    echo "✅ 虚拟环境已激活"
+
+    # 检查并安装依赖
+    echo "📦 检查依赖包..."
+    pip install python-dotenv requests tweepy python-telegram-bot schedule
+
+else
+    echo "❌ 虚拟环境不存在，创建新的虚拟环境..."
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+fi
+
+echo "3. 运行Twitter API诊断..."
 python3 diagnose_twitter.py
 
 echo ""
