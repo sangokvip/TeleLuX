@@ -34,6 +34,7 @@ class TeleLuXBot:
         self.last_check_time = None
         self.last_business_intro_time = None
         self.last_business_intro_message_id = None
+        self.user_activity_log = {}  # 记录用户进群退群活动
         
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理收到的消息"""
@@ -223,11 +224,39 @@ class TeleLuXBot:
             old_status = chat_member_update.old_chat_member.status
             new_status = chat_member_update.new_chat_member.status
             user = chat_member_update.new_chat_member.user
+            user_id = user.id
+            user_name = user.first_name or user.username or f"用户{user_id}"
+            username = user.username or "无用户名"
+            current_time = datetime.now()
 
-            # 检查是否有新用户加入
+            # 记录用户活动
+            if user_id not in self.user_activity_log:
+                self.user_activity_log[user_id] = {
+                    'user_name': user_name,
+                    'username': username,
+                    'join_times': [],
+                    'leave_times': [],
+                    'total_joins': 0,
+                    'total_leaves': 0
+                }
+
+            # 更新用户信息（可能会变化）
+            self.user_activity_log[user_id]['user_name'] = user_name
+            self.user_activity_log[user_id]['username'] = username
+
+            # 检查用户加入
             if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator', 'creator']:
-                user_name = user.first_name or user.username or "新朋友"
+                # 记录加入时间
+                self.user_activity_log[user_id]['join_times'].append(current_time)
+                self.user_activity_log[user_id]['total_joins'] += 1
 
+                logger.info(f"👋 用户加入: {user_name} (ID: {user_id}, 用户名: @{username})")
+
+                # 检查是否是重复进群用户
+                if self.user_activity_log[user_id]['total_joins'] > 1:
+                    await self._notify_repeat_user(user_id, 'join', context)
+
+                # 发送欢迎消息
                 welcome_message = f"""🎉 欢迎 <b>{self._escape_html(user_name)}</b> 加入露老师聊天群！
 
 🔍 认准露老师唯一账号：
@@ -236,14 +265,11 @@ class TeleLuXBot:
 
 💬 群内随意聊天，但请勿轻易相信任何陌生人，谨防诈骗 ⚠️"""
 
-                # 发送欢迎消息
                 sent_message = await context.bot.send_message(
                     chat_id=self.chat_id,
                     text=welcome_message,
                     parse_mode='HTML'
                 )
-
-                logger.info(f"👋 发送欢迎消息给新用户: {user_name} (ID: {user.id})")
 
                 # 安排8小时后删除消息
                 if sent_message:
@@ -258,8 +284,80 @@ class TeleLuXBot:
                     )
                     logger.info(f"⏰ 已安排8小时后删除欢迎消息 (消息ID: {sent_message.message_id})")
 
+            # 检查用户离开
+            elif old_status in ['member', 'administrator', 'creator'] and new_status in ['left', 'kicked']:
+                # 记录离开时间
+                self.user_activity_log[user_id]['leave_times'].append(current_time)
+                self.user_activity_log[user_id]['total_leaves'] += 1
+
+                logger.info(f"👋 用户离开: {user_name} (ID: {user_id}, 用户名: @{username})")
+
+                # 如果用户之前加入过，通知管理员
+                if self.user_activity_log[user_id]['total_joins'] > 0:
+                    await self._notify_repeat_user(user_id, 'leave', context)
+
         except Exception as e:
             logger.error(f"处理群组成员变化时发生错误: {e}")
+
+    async def _notify_repeat_user(self, user_id, action, context):
+        """通知管理员用户的重复进群/退群行为"""
+        try:
+            user_data = self.user_activity_log[user_id]
+            user_name = user_data['user_name']
+            username = user_data['username']
+
+            # 构建活动历史
+            activity_history = []
+
+            # 合并加入和离开时间，按时间排序
+            all_activities = []
+            for join_time in user_data['join_times']:
+                all_activities.append(('加入', join_time))
+            for leave_time in user_data['leave_times']:
+                all_activities.append(('离开', leave_time))
+
+            # 按时间排序
+            all_activities.sort(key=lambda x: x[1])
+
+            # 格式化活动历史
+            for activity_type, activity_time in all_activities:
+                time_str = activity_time.strftime('%Y-%m-%d %H:%M:%S')
+                activity_history.append(f"• {activity_type}: {time_str}")
+
+            # 构建通知消息
+            action_text = "加入" if action == 'join' else "离开"
+            notification_message = f"""🚨 <b>用户活动监控</b>
+
+👤 <b>用户信息:</b>
+• 姓名: {self._escape_html(user_name)}
+• 用户名: @{username}
+• ID: {user_id}
+
+📊 <b>活动统计:</b>
+• 总加入次数: {user_data['total_joins']}
+• 总离开次数: {user_data['total_leaves']}
+• 当前动作: {action_text}
+
+📝 <b>活动历史:</b>
+{chr(10).join(activity_history)}
+
+⚠️ 该用户存在多次进群/退群行为，请注意关注。"""
+
+            # 发送私信给 bryansuperb
+            try:
+                await context.bot.send_message(
+                    chat_id="bryansuperb",  # 发送给 bryansuperb
+                    text=notification_message,
+                    parse_mode='HTML'
+                )
+                logger.info(f"📨 已向 bryansuperb 发送用户活动通知: {user_name} ({action_text})")
+            except Exception as e:
+                logger.error(f"向 bryansuperb 发送通知失败: {e}")
+                # 如果发送失败，记录详细信息到日志
+                logger.info(f"用户活动详情 - {user_name} (ID: {user_id}, @{username}) {action_text}")
+
+        except Exception as e:
+            logger.error(f"处理用户活动通知时发生错误: {e}")
 
     async def _delete_welcome_message(self, context: ContextTypes.DEFAULT_TYPE):
         """删除欢迎消息的回调函数"""
@@ -479,6 +577,7 @@ async def main():
 • 自动欢迎新用户 (8小时后自动删除)
 • 定时业务介绍: 每3小时整点 (自动删除上一条)
 • Twitter推文分享功能
+• 用户进群退群行为监控
 
 💡 <b>私聊功能:</b>
 • 发送 '27' - 向群组发送业务介绍
