@@ -228,7 +228,13 @@ class TeleLuXBot:
             if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator', 'creator']:
                 user_name = user.first_name or user.username or "新朋友"
 
-                welcome_message = f"欢迎 <b>{self._escape_html(user_name)}</b> 光临露老师的聊天群 🎉"
+                welcome_message = f"""🎉 欢迎 <b>{self._escape_html(user_name)}</b> 加入露老师聊天群！
+
+🔍 认准露老师唯一账号：
+• X账号：<a href="https://x.com/xiuchiluchu910"><b>xiuchiluchu910</b></a>
+• Telegram账号：<a href="https://t.me/mteacherlu"><b>@mteacherlu</b></a>
+
+💬 群内随意聊天，但请勿轻易相信任何陌生人，谨防诈骗 ⚠️"""
 
                 # 发送欢迎消息
                 sent_message = await context.bot.send_message(
