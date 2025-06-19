@@ -33,6 +33,7 @@ class TeleLuXBot:
         self.database = None
         self.last_check_time = None
         self.last_business_intro_time = None
+        self.last_business_intro_message_id = None
         
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理收到的消息"""
@@ -76,13 +77,29 @@ class TeleLuXBot:
 
 ※希望得到更详细介绍询问请私信"""
 
+                    # 删除上一次的业务介绍消息
+                    if self.last_business_intro_message_id:
+                        try:
+                            await context.bot.delete_message(
+                                chat_id=self.chat_id,
+                                message_id=self.last_business_intro_message_id
+                            )
+                            logger.info(f"🗑️ 已删除上一次的业务介绍消息 (消息ID: {self.last_business_intro_message_id})")
+                        except Exception as e:
+                            logger.warning(f"删除上一次业务介绍消息失败: {e}")
+
                     # 发送到配置的群组
-                    await context.bot.send_message(
+                    sent_message = await context.bot.send_message(
                         chat_id=self.chat_id,
                         text=special_message,
                         parse_mode='HTML',
                         disable_web_page_preview=True
                     )
+
+                    # 保存新消息的ID
+                    if sent_message:
+                        self.last_business_intro_message_id = sent_message.message_id
+                        logger.info(f"💾 已保存新业务介绍消息ID: {sent_message.message_id}")
 
                     # 给私聊用户发送确认消息
                     await context.bot.send_message(
@@ -122,8 +139,6 @@ class TeleLuXBot:
 🕒 <b>时间:</b> {tweet_info['created_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}
 
 🔗 <a href="{tweet_info['url']}">查看原推文</a>
-
-<i>由 <b>{self._escape_html(user_name)}</b> 分享</i>
                                 """.strip()
 
                                 await context.bot.send_message(
@@ -215,7 +230,8 @@ class TeleLuXBot:
 
                 welcome_message = f"欢迎 <b>{self._escape_html(user_name)}</b> 光临露老师的聊天群 🎉"
 
-                await context.bot.send_message(
+                # 发送欢迎消息
+                sent_message = await context.bot.send_message(
                     chat_id=self.chat_id,
                     text=welcome_message,
                     parse_mode='HTML'
@@ -223,8 +239,43 @@ class TeleLuXBot:
 
                 logger.info(f"👋 发送欢迎消息给新用户: {user_name} (ID: {user.id})")
 
+                # 安排8小时后删除消息
+                if sent_message:
+                    context.job_queue.run_once(
+                        self._delete_welcome_message,
+                        when=8 * 60 * 60,  # 8小时 = 8 * 60 * 60 秒
+                        data={
+                            'chat_id': self.chat_id,
+                            'message_id': sent_message.message_id,
+                            'user_name': user_name
+                        }
+                    )
+                    logger.info(f"⏰ 已安排8小时后删除欢迎消息 (消息ID: {sent_message.message_id})")
+
         except Exception as e:
             logger.error(f"处理群组成员变化时发生错误: {e}")
+
+    async def _delete_welcome_message(self, context: ContextTypes.DEFAULT_TYPE):
+        """删除欢迎消息的回调函数"""
+        try:
+            job_data = context.job.data
+            chat_id = job_data['chat_id']
+            message_id = job_data['message_id']
+            user_name = job_data['user_name']
+
+            # 删除消息
+            await context.bot.delete_message(
+                chat_id=chat_id,
+                message_id=message_id
+            )
+
+            logger.info(f"🗑️ 已删除用户 {user_name} 的欢迎消息 (消息ID: {message_id})")
+
+        except Exception as e:
+            # 如果删除失败（比如消息已被手动删除），记录但不报错
+            logger.warning(f"删除欢迎消息失败: {e}")
+            if "message to delete not found" not in str(e).lower():
+                logger.error(f"删除欢迎消息时发生意外错误: {e}")
 
     def _escape_html(self, text):
         """转义HTML特殊字符"""
@@ -319,12 +370,29 @@ class TeleLuXBot:
 
 ※希望得到更详细介绍询问请私信"""
 
-                await self.application.bot.send_message(
+                # 删除上一次的业务介绍消息
+                if self.last_business_intro_message_id:
+                    try:
+                        await self.application.bot.delete_message(
+                            chat_id=self.chat_id,
+                            message_id=self.last_business_intro_message_id
+                        )
+                        logger.info(f"🗑️ 已删除上一次的业务介绍消息 (消息ID: {self.last_business_intro_message_id})")
+                    except Exception as e:
+                        logger.warning(f"删除上一次业务介绍消息失败: {e}")
+
+                # 发送新的业务介绍消息
+                sent_message = await self.application.bot.send_message(
                     chat_id=self.chat_id,
                     text=business_intro_message,
                     parse_mode='HTML',
                     disable_web_page_preview=True
                 )
+
+                # 保存新消息的ID
+                if sent_message:
+                    self.last_business_intro_message_id = sent_message.message_id
+                    logger.info(f"💾 已保存新业务介绍消息ID: {sent_message.message_id}")
 
                 self.last_business_intro_time = now
                 logger.info(f"📢 定时发送业务介绍 (时间: {now.strftime('%H:%M')})")
@@ -402,8 +470,8 @@ async def main():
         startup_message = f"""🚀 TeleLuX推文分享版已启动！
 
 📊 <b>功能说明:</b>
-• 自动欢迎新用户
-• 定时业务介绍: 每3小时整点
+• 自动欢迎新用户 (8小时后自动删除)
+• 定时业务介绍: 每3小时整点 (自动删除上一条)
 • Twitter推文分享功能
 
 💡 <b>私聊功能:</b>
