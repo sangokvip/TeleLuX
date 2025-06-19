@@ -343,16 +343,21 @@ class TeleLuXBot:
 
 ⚠️ 该用户存在多次进群/退群行为，请注意关注。"""
 
-            # 发送私信给 bryansuperb
+            # 发送私信给管理员
             try:
-                await context.bot.send_message(
-                    chat_id="bryansuperb",  # 发送给 bryansuperb
-                    text=notification_message,
-                    parse_mode='HTML'
-                )
-                logger.info(f"📨 已向 bryansuperb 发送用户活动通知: {user_name} ({action_text})")
+                admin_chat_id = Config.ADMIN_CHAT_ID
+                if admin_chat_id:
+                    await context.bot.send_message(
+                        chat_id=admin_chat_id,
+                        text=notification_message,
+                        parse_mode='HTML'
+                    )
+                    logger.info(f"📨 已向管理员发送用户活动通知: {user_name} ({action_text})")
+                else:
+                    logger.warning("ADMIN_CHAT_ID 未配置，无法发送通知")
+                    logger.info(f"用户活动详情 - {user_name} (ID: {user_id}, @{username}) {action_text}")
             except Exception as e:
-                logger.error(f"向 bryansuperb 发送通知失败: {e}")
+                logger.error(f"向管理员发送通知失败: {e}")
                 # 如果发送失败，记录详细信息到日志
                 logger.info(f"用户活动详情 - {user_name} (ID: {user_id}, @{username}) {action_text}")
 

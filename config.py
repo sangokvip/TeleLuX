@@ -17,6 +17,7 @@ class Config:
     # Telegram Bot 配置
     TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
     TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+    ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID')  # bryansuperb 的 Chat ID
     
     # 监控配置
     TWITTER_USERNAME = os.getenv('TWITTER_USERNAME')  # 要监控的Twitter用户名
