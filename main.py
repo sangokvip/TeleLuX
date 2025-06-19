@@ -48,6 +48,9 @@ class TeleLuXBot:
             
             # 处理私聊消息
             if chat_type == 'private':
+                # 转发私信给管理员
+                await self._forward_private_message_to_admin(update, context)
+
                 if message_text == "27":
                     special_message = """小助理下单机器人： 👉https://t.me/Lulaoshi_bot
 
@@ -210,6 +213,55 @@ class TeleLuXBot:
                 
         except Exception as e:
             logger.error(f"处理消息时发生错误: {e}")
+
+    async def _forward_private_message_to_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """转发私信消息给管理员"""
+        try:
+            admin_chat_id = Config.ADMIN_CHAT_ID
+            if not admin_chat_id:
+                logger.warning("ADMIN_CHAT_ID 未配置，无法转发私信")
+                return
+
+            user = update.effective_user
+            message = update.message
+            chat_id = update.effective_chat.id
+
+            # 获取用户信息
+            user_name = user.first_name or user.username or f"用户{user.id}"
+            username = user.username or "无用户名"
+            user_id = user.id
+
+            # 获取消息内容
+            message_text = message.text or ""
+            message_time = message.date.strftime('%Y-%m-%d %H:%M:%S UTC')
+
+            # 构建转发消息
+            forward_message = f"""📨 <b>收到私信</b>
+
+👤 <b>用户信息:</b>
+• 姓名: {self._escape_html(user_name)}
+• 用户名: @{username}
+• 用户ID: {user_id}
+• Chat ID: {chat_id}
+
+📝 <b>消息内容:</b>
+{self._escape_html(message_text)}
+
+🕒 <b>发送时间:</b> {message_time}
+
+💬 <b>回复方式:</b> 可直接回复此消息或使用 Chat ID: {chat_id}"""
+
+            # 发送转发消息给管理员
+            await context.bot.send_message(
+                chat_id=admin_chat_id,
+                text=forward_message,
+                parse_mode='HTML'
+            )
+
+            logger.info(f"📨 已转发私信给管理员: {user_name} (ID: {user_id}) - {message_text[:50]}...")
+
+        except Exception as e:
+            logger.error(f"转发私信给管理员失败: {e}")
 
     async def handle_chat_member(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理群组成员变化"""
@@ -583,6 +635,7 @@ async def main():
 • 定时业务介绍: 每3小时整点 (自动删除上一条)
 • Twitter推文分享功能
 • 用户进群退群行为监控
+• 私信消息转发给管理员
 
 💡 <b>私聊功能:</b>
 • 发送 '27' - 向群组发送业务介绍
