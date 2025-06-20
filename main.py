@@ -6,8 +6,7 @@ TeleLuX - Twitter监控和Telegram通知系统
 
 import asyncio
 import logging
-import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, MessageHandler, ChatMemberHandler, filters, ContextTypes
 from config import Config
@@ -226,6 +225,11 @@ class TeleLuXBot:
             message = update.message
             chat_id = update.effective_chat.id
 
+            # 检查是否是管理员自己发送的消息，如果是则不转发
+            if str(chat_id) == str(admin_chat_id):
+                logger.info(f"收到管理员消息，不进行转发: {message.text[:50] if message.text else '非文本消息'}...")
+                return
+
             # 获取用户信息
             user_name = user.first_name or user.username or f"用户{user.id}"
             username = user.username or "无用户名"
@@ -325,16 +329,22 @@ class TeleLuXBot:
 
                 # 安排8小时后删除消息
                 if sent_message:
-                    context.job_queue.run_once(
-                        self._delete_welcome_message,
-                        when=8 * 60 * 60,  # 8小时 = 8 * 60 * 60 秒
-                        data={
-                            'chat_id': self.chat_id,
-                            'message_id': sent_message.message_id,
-                            'user_name': user_name
-                        }
-                    )
-                    logger.info(f"⏰ 已安排8小时后删除欢迎消息 (消息ID: {sent_message.message_id})")
+                    try:
+                        if context.job_queue:
+                            context.job_queue.run_once(
+                                self._delete_welcome_message,
+                                when=8 * 60 * 60,  # 8小时 = 8 * 60 * 60 秒
+                                data={
+                                    'chat_id': self.chat_id,
+                                    'message_id': sent_message.message_id,
+                                    'user_name': user_name
+                                }
+                            )
+                            logger.info(f"⏰ 已安排8小时后删除欢迎消息 (消息ID: {sent_message.message_id})")
+                        else:
+                            logger.warning("JobQueue不可用，无法安排自动删除欢迎消息")
+                    except Exception as e:
+                        logger.error(f"安排删除欢迎消息失败: {e}")
 
             # 检查用户离开
             elif old_status in ['member', 'administrator', 'creator'] and new_status in ['left', 'kicked']:
