@@ -7,8 +7,8 @@ TeleLuX - Twitter监控和Telegram通知系统
 import asyncio
 import logging
 from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, MessageHandler, ChatMemberHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram import Update
+from telegram.ext import Application, MessageHandler, ChatMemberHandler, filters, ContextTypes
 from config import Config
 from twitter_monitor import TwitterMonitor
 from database import Database
@@ -251,181 +251,21 @@ class TeleLuXBot:
 📝 <b>消息内容:</b>
 {self._escape_html(message_text)}
 
-🕒 <b>发送时间:</b> {message_time}"""
+🕒 <b>发送时间:</b> {message_time}
 
-            # 创建回复按钮
-            keyboard = [
-                [
-                    InlineKeyboardButton("💬 快速回复", callback_data=f"reply_{chat_id}"),
-                    InlineKeyboardButton("📋 复制Chat ID", callback_data=f"copy_{chat_id}")
-                ],
-                [
-                    InlineKeyboardButton("🚫 忽略", callback_data=f"ignore_{chat_id}"),
-                    InlineKeyboardButton("⚠️ 标记可疑", callback_data=f"suspicious_{chat_id}")
-                ]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+💬 <b>回复方式:</b> 可直接回复此消息或使用 Chat ID: {chat_id}"""
 
-            # 发送转发消息给管理员（带按钮）
+            # 发送转发消息给管理员
             await context.bot.send_message(
                 chat_id=admin_chat_id,
                 text=forward_message,
-                parse_mode='HTML',
-                reply_markup=reply_markup
+                parse_mode='HTML'
             )
 
             logger.info(f"📨 已转发私信给管理员: {user_name} (ID: {user_id}) - {message_text[:50]}...")
 
         except Exception as e:
             logger.error(f"转发私信给管理员失败: {e}")
-
-    async def handle_callback_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """处理内联键盘回调"""
-        try:
-            query = update.callback_query
-            await query.answer()  # 确认回调查询
-
-            callback_data = query.data
-            admin_chat_id = Config.ADMIN_CHAT_ID
-
-            # 检查是否是管理员操作
-            if str(query.from_user.id) != str(admin_chat_id):
-                await query.edit_message_text("❌ 只有管理员可以使用此功能")
-                return
-
-            # 解析回调数据
-            action, target_chat_id = callback_data.split('_', 1)
-
-            if action == "reply":
-                # 快速回复功能
-                reply_message = f"""💬 <b>回复用户消息</b>
-
-🎯 <b>目标用户 Chat ID:</b> {target_chat_id}
-
-📝 <b>请发送您要回复的消息内容</b>
-格式：/reply {target_chat_id} 您的回复内容
-
-💡 <b>示例:</b>
-/reply {target_chat_id} 您好，感谢您的咨询！
-
-⚠️ <b>注意:</b> 请确保消息内容准确，发送后无法撤回"""
-
-                await query.edit_message_text(
-                    text=reply_message,
-                    parse_mode='HTML'
-                )
-
-            elif action == "copy":
-                # 复制Chat ID功能
-                copy_message = f"""📋 <b>Chat ID 已准备复制</b>
-
-🎯 <b>用户 Chat ID:</b> <code>{target_chat_id}</code>
-
-💡 <b>使用方法:</b>
-1. 点击上方的Chat ID进行复制
-2. 在任意聊天界面输入复制的ID
-3. 发送消息给该用户
-
-📱 <b>或者使用命令:</b>
-/reply {target_chat_id} 您的消息内容"""
-
-                await query.edit_message_text(
-                    text=copy_message,
-                    parse_mode='HTML'
-                )
-
-            elif action == "ignore":
-                # 忽略消息
-                ignore_message = f"""🚫 <b>消息已标记为忽略</b>
-
-👤 <b>用户 Chat ID:</b> {target_chat_id}
-⏰ <b>操作时间:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-✅ 此消息已被标记为已处理"""
-
-                await query.edit_message_text(
-                    text=ignore_message,
-                    parse_mode='HTML'
-                )
-
-            elif action == "suspicious":
-                # 标记可疑用户
-                suspicious_message = f"""⚠️ <b>用户已标记为可疑</b>
-
-👤 <b>用户 Chat ID:</b> {target_chat_id}
-🚨 <b>标记时间:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-👮 <b>操作管理员:</b> {query.from_user.first_name or query.from_user.username}
-
-📝 <b>建议操作:</b>
-• 密切关注该用户后续行为
-• 必要时可考虑限制或移除
-• 记录相关证据以备查证
-
-⚠️ 此用户已被加入监控列表"""
-
-                await query.edit_message_text(
-                    text=suspicious_message,
-                    parse_mode='HTML'
-                )
-
-                # 记录可疑用户到日志
-                logger.warning(f"🚨 管理员标记可疑用户: Chat ID {target_chat_id}")
-
-        except Exception as e:
-            logger.error(f"处理回调查询失败: {e}")
-            try:
-                await query.edit_message_text(f"❌ 处理失败: {str(e)[:100]}")
-            except:
-                pass
-
-    async def handle_reply_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """处理回复命令"""
-        try:
-            admin_chat_id = Config.ADMIN_CHAT_ID
-
-            # 检查是否是管理员
-            if str(update.effective_user.id) != str(admin_chat_id):
-                await update.message.reply_text("❌ 只有管理员可以使用此命令")
-                return
-
-            # 解析命令参数
-            command_text = update.message.text
-            parts = command_text.split(' ', 2)
-
-            if len(parts) < 3:
-                await update.message.reply_text(
-                    "❌ 命令格式错误\n\n💡 正确格式：\n/reply [Chat_ID] [消息内容]\n\n📝 示例：\n/reply 123456789 您好，感谢您的咨询！"
-                )
-                return
-
-            target_chat_id = parts[1]
-            reply_content = parts[2]
-
-            # 发送回复消息
-            await context.bot.send_message(
-                chat_id=target_chat_id,
-                text=reply_content
-            )
-
-            # 确认消息
-            confirm_message = f"""✅ <b>回复已发送</b>
-
-🎯 <b>目标用户:</b> {target_chat_id}
-📝 <b>回复内容:</b> {reply_content}
-⏰ <b>发送时间:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-💡 消息已成功发送给用户"""
-
-            await update.message.reply_text(
-                text=confirm_message,
-                parse_mode='HTML'
-            )
-
-            logger.info(f"📨 管理员回复用户: {target_chat_id} - {reply_content[:50]}...")
-
-        except Exception as e:
-            logger.error(f"处理回复命令失败: {e}")
-            await update.message.reply_text(f"❌ 发送回复失败: {str(e)[:100]}")
 
     async def handle_chat_member(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理群组成员变化"""
@@ -743,14 +583,6 @@ class TeleLuXBot:
             # 添加消息处理器 - 处理所有文本消息
             message_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message)
             self.application.add_handler(message_handler)
-
-            # 添加回复命令处理器
-            reply_handler = MessageHandler(filters.Regex(r'^/reply\s+'), self.handle_reply_command)
-            self.application.add_handler(reply_handler)
-
-            # 添加回调查询处理器
-            callback_handler = CallbackQueryHandler(self.handle_callback_query)
-            self.application.add_handler(callback_handler)
 
             # 添加群组成员变化处理器
             chat_member_handler = ChatMemberHandler(self.handle_chat_member, ChatMemberHandler.CHAT_MEMBER)
