@@ -333,14 +333,14 @@ class TeleLuXBot:
                         if context.job_queue:
                             context.job_queue.run_once(
                                 self._delete_welcome_message,
-                                when=8 * 60 * 60,  # 8小时 = 8 * 60 * 60 秒
+                                when=60,  # 1分钟 = 60秒
                                 data={
                                     'chat_id': self.chat_id,
                                     'message_id': sent_message.message_id,
                                     'user_name': user_name
                                 }
                             )
-                            logger.info(f"⏰ 已安排8小时后删除欢迎消息 (消息ID: {sent_message.message_id})")
+                            logger.info(f"⏰ 已安排1分钟后删除欢迎消息 (消息ID: {sent_message.message_id})")
                         else:
                             logger.warning("JobQueue不可用，无法安排自动删除欢迎消息")
                     except Exception as e:
@@ -641,7 +641,7 @@ async def main():
         startup_message = f"""🚀 TeleLuX推文分享版已启动！
 
 📊 <b>功能说明:</b>
-• 自动欢迎新用户 (8小时后自动删除)
+• 自动欢迎新用户 (1分钟后自动删除)
 • 定时业务介绍: 每3小时整点 (自动删除上一条)
 • Twitter推文分享功能
 • 用户进群退群行为监控
