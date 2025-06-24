@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeleLuX 欢迎消息预览</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .message-container {
+            background-color: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .message-title {
+            color: #0088cc;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #0088cc;
+            padding-bottom: 10px;
+        }
+        .welcome-message {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .welcome-message a {
+            color: #0088cc;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .welcome-message a:hover {
+            text-decoration: underline;
+        }
+        .features {
+            background-color: #e8f4fd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .features h3 {
+            color: #0088cc;
+            margin-top: 0;
+        }
+        .features ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .features li {
+            margin: 5px 0;
+        }
+        .code-block {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎉 TeleLuX 欢迎消息预览</h1>
+    
+    <div class="message-container">
+        <div class="message-title">📱 Telegram 显示效果</div>
+        <div class="welcome-message">
+            🎉 欢迎 <b>测试用户</b> 加入露老师聊天群！<br><br>
+            
+            🔍 认准露老师唯一账号：<br>
+            • X账号：<a href="https://x.com/xiuchiluchu910" target="_blank"><b>xiuchiluchu910</b></a><br>
+            • Telegram账号：<a href="https://t.me/mteacherlu" target="_blank"><b>@mteacherlu</b></a><br><br>
+            
+            💬 群内随意聊天，但请勿轻易相信任何陌生人，谨防诈骗 ⚠️
+        </div>
+    </div>
+    
+    <div class="message-container">
+        <div class="message-title">💻 HTML 源代码</div>
+        <div class="code-block">
+🎉 欢迎 &lt;b&gt;{用户名}&lt;/b&gt; 加入露老师聊天群！
+
+🔍 认准露老师唯一账号：
+• X账号：&lt;a href="https://x.com/xiuchiluchu910"&gt;&lt;b&gt;xiuchiluchu910&lt;/b&gt;&lt;/a&gt;
+• Telegram账号：&lt;a href="https://t.me/mteacherlu"&gt;&lt;b&gt;@mteacherlu&lt;/b&gt;&lt;/a&gt;
+
+💬 群内随意聊天，但请勿轻易相信任何陌生人，谨防诈骗 ⚠️
+        </div>
+    </div>
+    
+    <div class="features">
+        <h3>🔗 超链接功能特点</h3>
+        <ul>
+            <li><strong>X账号链接：</strong> 点击直接跳转到 https://x.com/xiuchiluchu910</li>
+            <li><strong>Telegram账号链接：</strong> 点击直接跳转到 https://t.me/mteacherlu</li>
+            <li><strong>用户体验：</strong> 无需复制粘贴，一键访问官方账号</li>
+            <li><strong>防诈骗：</strong> 明确标识官方账号，降低被骗风险</li>
+        </ul>
+        
+        <h3>🎨 视觉效果</h3>
+        <ul>
+            <li>🎉 欢迎emoji增加喜庆感</li>
+            <li>🔍 搜索emoji突出认证信息</li>
+            <li>💬 聊天emoji说明群组用途</li>
+            <li>⚠️ 警告emoji强调安全提醒</li>
+        </ul>
+        
+        <h3>⏰ 自动管理</h3>
+        <ul>
+            <li>新用户加入时自动发送</li>
+            <li>8小时后自动删除</li>
+            <li>保持群组整洁</li>
+        </ul>
+    </div>
+    
+    <div class="message-container">
+        <div class="message-title">🧪 测试说明</div>
+        <p><strong>在VPS上测试：</strong></p>
+        <div class="code-block">
+cd ~/TeleLuX
+source venv/bin/activate
+python3 test_welcome_message.py
+        </div>
+        
+        <p><strong>部署更新：</strong></p>
+        <div class="code-block">
+sudo systemctl stop telex.service
+# 更新 main.py 文件
+sudo systemctl start telex.service
+sudo journalctl -u telex.service -f
+        </div>
+    </div>
+    
+    <div style="text-align: center; margin-top: 30px; color: #666; font-size: 14px;">
+        <p>TeleLuX 推文分享与Telegram通知系统</p>
+        <p>欢迎消息预览 - 包含超链接功能</p>
+    </div>
+</body>
+</html>

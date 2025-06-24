@@ -34,6 +34,7 @@ class TeleLuXBot:
         self.last_business_intro_time = None
         self.last_business_intro_message_id = None
         self.user_activity_log = {}  # 记录用户进群退群活动
+        self.welcome_messages = []  # 记录所有欢迎消息ID
         
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理收到的消息"""
@@ -112,6 +113,19 @@ class TeleLuXBot:
                     )
 
                     logger.info(f"🎉 收到私聊触发词'27'，已向群组发送业务介绍消息 (来自用户: {user_name})")
+
+                elif message_text.lower() == "clear":
+                    # 处理清除欢迎消息命令
+                    await self._clear_welcome_messages(context)
+
+                    # 给私聊用户发送确认消息
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="✅ 已清除群内所有欢迎消息",
+                        parse_mode='HTML'
+                    )
+
+                    logger.info(f"🧹 收到私聊清除命令'clear'，已清除所有欢迎消息 (来自用户: {user_name})")
 
                 elif self._is_twitter_url(message_text):
                     # 处理私信发送的Twitter URL
@@ -198,7 +212,7 @@ class TeleLuXBot:
                     # 对其他私聊消息给予提示
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text="👋 你好！\n\n💡 可用功能：\n• 发送 '27' - 向群组发送业务介绍\n• 发送 Twitter URL - 分享推文到群组\n\n📝 支持的URL格式：\n• https://twitter.com/用户名/status/推文ID\n• https://x.com/用户名/status/推文ID",
+                        text="👋 你好！\n\n💡 可用功能：\n• 发送 '27' - 向群组发送业务介绍\n• 发送 'clear' - 清除群内所有欢迎消息\n• 发送 Twitter URL - 分享推文到群组\n\n📝 支持的URL格式：\n• https://twitter.com/用户名/status/推文ID\n• https://x.com/用户名/status/推文ID",
                         parse_mode='HTML'
                     )
                     logger.info(f"收到私聊消息'{message_text}'，已回复提示信息 (来自用户: {user_name})")
@@ -267,6 +281,55 @@ class TeleLuXBot:
         except Exception as e:
             logger.error(f"转发私信给管理员失败: {e}")
 
+    async def _clear_welcome_messages(self, context: ContextTypes.DEFAULT_TYPE):
+        """清除所有欢迎消息"""
+        try:
+            cleared_count = 0
+            failed_count = 0
+
+            # 复制列表以避免在迭代时修改
+            messages_to_clear = self.welcome_messages.copy()
+
+            for message_info in messages_to_clear:
+                try:
+                    await context.bot.delete_message(
+                        chat_id=message_info['chat_id'],
+                        message_id=message_info['message_id']
+                    )
+                    cleared_count += 1
+                    logger.info(f"🗑️ 已删除欢迎消息 (消息ID: {message_info['message_id']}, 用户: {message_info['user_name']})")
+                except Exception as e:
+                    failed_count += 1
+                    logger.warning(f"删除欢迎消息失败 (消息ID: {message_info['message_id']}): {e}")
+
+            # 清空欢迎消息列表
+            self.welcome_messages.clear()
+
+            # 发送清除结果给管理员
+            admin_chat_id = Config.ADMIN_CHAT_ID
+            if admin_chat_id:
+                result_message = f"""🧹 <b>欢迎消息清除完成</b>
+
+📊 <b>清除统计:</b>
+• 成功删除: {cleared_count} 条
+• 删除失败: {failed_count} 条
+• 总计处理: {len(messages_to_clear)} 条
+
+⏰ <b>清除时间:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+✅ 所有欢迎消息已清除"""
+
+                await context.bot.send_message(
+                    chat_id=admin_chat_id,
+                    text=result_message,
+                    parse_mode='HTML'
+                )
+
+            logger.info(f"🧹 欢迎消息清除完成: 成功 {cleared_count} 条, 失败 {failed_count} 条")
+
+        except Exception as e:
+            logger.error(f"清除欢迎消息时发生错误: {e}")
+
     async def handle_chat_member(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理群组成员变化"""
         try:
@@ -308,7 +371,7 @@ class TeleLuXBot:
 
                 logger.info(f"👋 用户加入: {user_name} (ID: {user_id}, 用户名: @{username})")
 
-                # 检查是否是重复进群用户
+                # 检查是否是重复进群用户（超过1次才通知）
                 if self.user_activity_log[user_id]['total_joins'] > 1:
                     await self._notify_repeat_user(user_id, 'join', context)
 
@@ -327,7 +390,19 @@ class TeleLuXBot:
                     parse_mode='HTML'
                 )
 
-                # 安排8小时后删除消息
+                # 记录欢迎消息信息
+                if sent_message:
+                    welcome_info = {
+                        'message_id': sent_message.message_id,
+                        'chat_id': self.chat_id,
+                        'user_name': user_name,
+                        'user_id': user_id,
+                        'timestamp': current_time
+                    }
+                    self.welcome_messages.append(welcome_info)
+                    logger.info(f"📝 已记录欢迎消息: {user_name} (消息ID: {sent_message.message_id})")
+
+                # 安排1分钟后删除消息
                 if sent_message:
                     try:
                         if context.job_queue:
@@ -354,8 +429,8 @@ class TeleLuXBot:
 
                 logger.info(f"👋 用户离开: {user_name} (ID: {user_id}, 用户名: @{username})")
 
-                # 如果用户之前加入过，通知管理员
-                if self.user_activity_log[user_id]['total_joins'] > 0:
+                # 如果用户离开超过1次，通知管理员
+                if self.user_activity_log[user_id]['total_leaves'] > 1:
                     await self._notify_repeat_user(user_id, 'leave', context)
 
         except Exception as e:
@@ -440,6 +515,12 @@ class TeleLuXBot:
                 message_id=message_id
             )
 
+            # 从欢迎消息列表中移除
+            self.welcome_messages = [
+                msg for msg in self.welcome_messages
+                if msg['message_id'] != message_id
+            ]
+
             logger.info(f"🗑️ 已删除用户 {user_name} 的欢迎消息 (消息ID: {message_id})")
 
         except Exception as e:
@@ -447,6 +528,14 @@ class TeleLuXBot:
             logger.warning(f"删除欢迎消息失败: {e}")
             if "message to delete not found" not in str(e).lower():
                 logger.error(f"删除欢迎消息时发生意外错误: {e}")
+
+            # 即使删除失败，也从列表中移除（可能消息已被手动删除）
+            job_data = context.job.data
+            message_id = job_data['message_id']
+            self.welcome_messages = [
+                msg for msg in self.welcome_messages
+                if msg['message_id'] != message_id
+            ]
 
     def _escape_html(self, text):
         """转义HTML特殊字符"""
@@ -649,6 +738,7 @@ async def main():
 
 💡 <b>私聊功能:</b>
 • 发送 '27' - 向群组发送业务介绍
+• 发送 'clear' - 清除群内所有欢迎消息
 • 发送 Twitter URL - 分享推文到群组
 
 📝 <b>支持的URL格式:</b>
