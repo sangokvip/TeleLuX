@@ -28,6 +28,21 @@ class Database:
                         processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
+                
+                # 创建黑名单表
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS blacklist (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER UNIQUE NOT NULL,
+                        user_name TEXT,
+                        username TEXT,
+                        reason TEXT DEFAULT '多次离群',
+                        leave_count INTEGER DEFAULT 0,
+                        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        added_by TEXT DEFAULT 'system'
+                    )
+                ''')
+                
                 conn.commit()
                 logger.info("数据库初始化成功")
         except Exception as e:
@@ -88,4 +103,72 @@ class Database:
                 return deleted_count
         except Exception as e:
             logger.error(f"清理旧记录失败: {e}")
+            return 0
+    def add_to_blacklist(self, user_id, user_name, username, leave_count, reason="多次离群"):
+        """将用户添加到黑名单"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT OR REPLACE INTO blacklist 
+                    (user_id, user_name, username, reason, leave_count, added_at)
+                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (user_id, user_name, username, reason, leave_count))
+                conn.commit()
+                logger.info(f"用户 {user_name} (ID: {user_id}) 已添加到黑名单")
+                return True
+        except Exception as e:
+            logger.error(f"添加用户到黑名单失败: {e}")
+            return False
+    
+    def is_user_blacklisted(self, user_id):
+        """检查用户是否在黑名单中"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT 1 FROM blacklist WHERE user_id = ?', (user_id,))
+                return cursor.fetchone() is not None
+        except Exception as e:
+            logger.error(f"检查黑名单状态失败: {e}")
+            return False
+    
+    def get_blacklist(self):
+        """获取黑名单列表"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT user_id, user_name, username, reason, leave_count, added_at 
+                    FROM blacklist 
+                    ORDER BY added_at DESC
+                ''')
+                return cursor.fetchall()
+        except Exception as e:
+            logger.error(f"获取黑名单失败: {e}")
+            return []
+    
+    def remove_from_blacklist(self, user_id):
+        """从黑名单中移除用户"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM blacklist WHERE user_id = ?', (user_id,))
+                removed = cursor.rowcount > 0
+                conn.commit()
+                if removed:
+                    logger.info(f"用户 ID {user_id} 已从黑名单中移除")
+                return removed
+        except Exception as e:
+            logger.error(f"从黑名单移除用户失败: {e}")
+            return False
+    
+    def get_blacklist_count(self):
+        """获取黑名单用户数量"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT COUNT(*) FROM blacklist')
+                return cursor.fetchone()[0]
+        except Exception as e:
+            logger.error(f"获取黑名单数量失败: {e}")
             return 0

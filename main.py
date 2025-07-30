@@ -127,6 +127,24 @@ class TeleLuXBot:
 
                     logger.info(f"🧹 收到私聊清除命令'clear'，已清除所有欢迎消息 (来自用户: {user_name})")
 
+                elif message_text.lower() == "blacklist":
+                    # 处理查看黑名单命令
+                    await self._show_blacklist(context, chat_id)
+                    logger.info(f"📋 收到私聊黑名单查看命令 (来自用户: {user_name})")
+
+                elif message_text.lower().startswith("unban "):
+                    # 处理从黑名单移除用户命令
+                    try:
+                        user_id_to_unban = int(message_text.split()[1])
+                        await self._unban_user(context, chat_id, user_id_to_unban)
+                        logger.info(f"🔓 收到私聊解封命令，用户ID: {user_id_to_unban} (来自用户: {user_name})")
+                    except (IndexError, ValueError):
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="❌ 命令格式错误，请使用: unban 用户ID",
+                            parse_mode='HTML'
+                        )
+
                 elif self._is_twitter_url(message_text):
                     # 处理私信发送的Twitter URL
                     if self.twitter_monitor:
@@ -212,7 +230,7 @@ class TeleLuXBot:
                     # 对其他私聊消息给予提示
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text="👋 你好！\n\n💡 可用功能：\n• 发送 '27' - 向群组发送业务介绍\n• 发送 'clear' - 清除群内所有欢迎消息\n• 发送 Twitter URL - 分享推文到群组\n\n📝 支持的URL格式：\n• https://twitter.com/用户名/status/推文ID\n• https://x.com/用户名/status/推文ID",
+                        text="👋 你好！\n\n💡 可用功能：\n• 发送 '27' - 向群组发送业务介绍\n• 发送 'clear' - 清除群内所有欢迎消息\n• 发送 'blacklist' - 查看黑名单\n• 发送 'unban 用户ID' - 从黑名单移除用户\n• 发送 Twitter URL - 分享推文到群组\n\n📝 支持的URL格式：\n• https://twitter.com/用户名/status/推文ID\n• https://x.com/用户名/status/推文ID",
                         parse_mode='HTML'
                     )
                     logger.info(f"收到私聊消息'{message_text}'，已回复提示信息 (来自用户: {user_name})")
@@ -429,6 +447,24 @@ class TeleLuXBot:
 
                 logger.info(f"👋 用户离开: {user_name} (ID: {user_id}, 用户名: @{username})")
 
+                # 检查是否是第二次离开，如果是则加入黑名单
+                if self.user_activity_log[user_id]['total_leaves'] >= 2:
+                    # 检查用户是否已经在黑名单中
+                    if not self.database.is_user_blacklisted(user_id):
+                        # 添加到黑名单
+                        success = self.database.add_to_blacklist(
+                            user_id=user_id,
+                            user_name=user_name,
+                            username=username,
+                            leave_count=self.user_activity_log[user_id]['total_leaves'],
+                            reason=f"多次离群 ({self.user_activity_log[user_id]['total_leaves']}次)"
+                        )
+                        
+                        if success:
+                            # 通知管理员用户已被加入黑名单
+                            await self._notify_user_blacklisted(user_id, context)
+                            logger.info(f"🚫 用户 {user_name} (ID: {user_id}) 因多次离群已自动加入黑名单")
+
                 # 如果用户离开超过1次，通知管理员
                 if self.user_activity_log[user_id]['total_leaves'] > 1:
                     await self._notify_repeat_user(user_id, 'leave', context)
@@ -500,6 +536,68 @@ class TeleLuXBot:
 
         except Exception as e:
             logger.error(f"处理用户活动通知时发生错误: {e}")
+
+    async def _notify_user_blacklisted(self, user_id, context):
+        """通知管理员用户已被加入黑名单"""
+        try:
+            user_data = self.user_activity_log[user_id]
+            user_name = user_data['user_name']
+            username = user_data['username']
+
+            # 构建活动历史
+            activity_history = []
+            all_activities = []
+            for join_time in user_data['join_times']:
+                all_activities.append(('加入', join_time))
+            for leave_time in user_data['leave_times']:
+                all_activities.append(('离开', leave_time))
+
+            # 按时间排序
+            all_activities.sort(key=lambda x: x[1])
+
+            # 格式化活动历史
+            for activity_type, activity_time in all_activities:
+                time_str = activity_time.strftime('%Y-%m-%d %H:%M:%S')
+                activity_history.append(f"• {activity_type}: {time_str}")
+
+            blacklist_message = f"""🚫 <b>用户已自动加入黑名单</b>
+
+👤 <b>用户信息:</b>
+• 姓名: {self._escape_html(user_name)}
+• 用户名: @{username}
+• ID: {user_id}
+
+📊 <b>统计信息:</b>
+• 总加入次数: {user_data['total_joins']}
+• 总离开次数: {user_data['total_leaves']}
+• 加入黑名单原因: 多次离群 ({user_data['total_leaves']}次)
+
+📝 <b>活动历史:</b>
+{chr(10).join(activity_history)}
+
+⚠️ 该用户因多次离群已被自动加入黑名单。
+
+💡 <b>管理命令:</b>
+• 发送 'blacklist' - 查看黑名单
+• 发送 'unban {user_id}' - 从黑名单移除用户"""
+
+            # 发送私信给管理员
+            try:
+                admin_chat_id = Config.ADMIN_CHAT_ID
+                if admin_chat_id:
+                    await context.bot.send_message(
+                        chat_id=admin_chat_id,
+                        text=blacklist_message,
+                        parse_mode='HTML'
+                    )
+                    logger.info(f"📨 已向管理员发送黑名单通知: {user_name}")
+                else:
+                    logger.warning("ADMIN_CHAT_ID 未配置，无法发送黑名单通知")
+            except Exception as e:
+                logger.error(f"向管理员发送黑名单通知失败: {e}")
+
+        except Exception as e:
+            logger.error(f"处理黑名单通知时发生错误: {e}")
 
     async def _delete_welcome_message(self, context: ContextTypes.DEFAULT_TYPE):
         """删除欢迎消息的回调函数"""
@@ -788,3 +886,103 @@ if __name__ == "__main__":
         logger.info("\n👋 系统已停止")
     except Exception as e:
         logger.error(f"❌ 运行失败: {e}")
+    async def _show_blacklist(self, context, chat_id):
+        """显示黑名单列表"""
+        try:
+            blacklist = self.database.get_blacklist()
+            blacklist_count = len(blacklist)
+
+            if blacklist_count == 0:
+                message = "📋 <b>黑名单管理</b>\n\n✅ 黑名单为空，暂无被封禁用户。"
+            else:
+                message = f"📋 <b>黑名单管理</b>\n\n👥 <b>总计:</b> {blacklist_count} 个用户\n\n"
+                
+                for i, (user_id, user_name, username, reason, leave_count, added_at) in enumerate(blacklist, 1):
+                    # 格式化时间
+                    try:
+                        from datetime import datetime
+                        if isinstance(added_at, str):
+                            added_time = datetime.fromisoformat(added_at.replace('Z', '+00:00'))
+                        else:
+                            added_time = added_at
+                        time_str = added_time.strftime('%Y-%m-%d %H:%M')
+                    except:
+                        time_str = str(added_at)[:16]
+
+                    message += f"""<b>{i}.</b> {self._escape_html(user_name or '未知用户')}
+• ID: <code>{user_id}</code>
+• 用户名: @{username or '无'}
+• 原因: {reason}
+• 离群次数: {leave_count}
+• 加入时间: {time_str}
+
+"""
+
+                message += f"\n💡 <b>管理提示:</b>\n• 发送 'unban 用户ID' 可移除用户\n• 例如: unban {blacklist[0][0]}"
+
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=message,
+                parse_mode='HTML'
+            )
+
+        except Exception as e:
+            logger.error(f"显示黑名单失败: {e}")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="❌ 获取黑名单信息失败",
+                parse_mode='HTML'
+            )
+
+    async def _unban_user(self, context, chat_id, user_id):
+        """从黑名单移除用户"""
+        try:
+            # 检查用户是否在黑名单中
+            if not self.database.is_user_blacklisted(user_id):
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"❌ 用户 ID {user_id} 不在黑名单中",
+                    parse_mode='HTML'
+                )
+                return
+
+            # 从黑名单移除
+            success = self.database.remove_from_blacklist(user_id)
+            
+            if success:
+                # 获取用户信息（如果在活动日志中）
+                user_info = ""
+                if user_id in self.user_activity_log:
+                    user_data = self.user_activity_log[user_id]
+                    user_info = f" ({user_data['user_name']})"
+
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"✅ 已将用户 ID {user_id}{user_info} 从黑名单中移除",
+                    parse_mode='HTML'
+                )
+
+                # 通知管理员
+                admin_chat_id = Config.ADMIN_CHAT_ID
+                if admin_chat_id and str(chat_id) != str(admin_chat_id):
+                    await context.bot.send_message(
+                        chat_id=admin_chat_id,
+                        text=f"🔓 <b>用户解封通知</b>\n\n用户 ID {user_id}{user_info} 已从黑名单中移除。",
+                        parse_mode='HTML'
+                    )
+
+                logger.info(f"🔓 用户 ID {user_id} 已从黑名单中移除")
+            else:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"❌ 移除用户 ID {user_id} 失败",
+                    parse_mode='HTML'
+                )
+
+        except Exception as e:
+            logger.error(f"移除黑名单用户失败: {e}")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="❌ 操作失败，请稍后重试",
+                parse_mode='HTML'
+            )
