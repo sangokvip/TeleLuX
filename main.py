@@ -242,6 +242,9 @@ class TeleLuXBot:
                 # 忽略其他群组的消息
                 logger.info(f"忽略来自其他群组的消息: {chat_id}")
 
+        except Exception as e:
+            logger.error(f"处理消息时发生错误: {e}")
+
     async def _show_blacklist(self, context, chat_id):
         """显示黑名单列表"""
         try:
