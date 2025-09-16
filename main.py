@@ -345,9 +345,6 @@ class TeleLuXBot:
                 text="❌ 操作失败，请稍后重试",
                 parse_mode='HTML'
             )
-                
-        except Exception as e:
-            logger.error(f"处理消息时发生错误: {e}")
 
     async def _forward_private_message_to_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """转发私信消息给管理员"""
