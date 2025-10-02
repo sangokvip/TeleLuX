@@ -25,7 +25,25 @@ class Config:
     
     # 数据库配置
     DATABASE_PATH = os.getenv('DATABASE_PATH', 'tweets.db')
-    
+
+    @classmethod
+    def require_telegram(cls, require_chat_id=False, require_admin=False):
+        missing = []
+
+        if not cls.TELEGRAM_BOT_TOKEN:
+            missing.append('TELEGRAM_BOT_TOKEN')
+
+        if require_chat_id and not cls.TELEGRAM_CHAT_ID:
+            missing.append('TELEGRAM_CHAT_ID')
+
+        if require_admin and not cls.ADMIN_CHAT_ID:
+            missing.append('ADMIN_CHAT_ID')
+
+        if missing:
+            raise ValueError(f"缺少必要的Telegram配置: {', '.join(missing)}")
+
+        return True
+
     @classmethod
     def validate(cls):
         """验证必要的配置是否存在"""

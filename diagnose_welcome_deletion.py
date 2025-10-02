@@ -204,8 +204,8 @@ async def main():
     print("=" * 50)
     
     try:
-        # 验证配置
-        Config.validate()
+        # 验证必要的Telegram配置
+        Config.require_telegram(require_chat_id=True)
         print("✅ 配置验证通过")
         print(f"📱 群组ID: {Config.TELEGRAM_CHAT_ID}")
         

@@ -212,10 +212,11 @@ class StandaloneReplyBot:
             )
             
             # 确认消息
+            safe_reply_content = self._escape_html(reply_content)
             confirm_message = f"""✅ <b>回复已发送</b>
 
 🎯 <b>目标用户:</b> {target_chat_id}
-📝 <b>回复内容:</b> {reply_content}
+📝 <b>回复内容:</b> {safe_reply_content}
 ⏰ <b>发送时间:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 💡 消息已成功发送给用户"""
@@ -304,8 +305,8 @@ async def main():
     try:
         logger.info("🚀 独立回复机器人启动")
         
-        # 验证配置
-        Config.validate()
+        # 验证必要的Telegram配置
+        Config.require_telegram(require_chat_id=False, require_admin=True)
         logger.info("✅ 配置验证通过")
         
         # 创建机器人
