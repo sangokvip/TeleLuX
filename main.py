@@ -202,9 +202,17 @@ class TeleLuXBot:
 👤 <b>用户:</b> @{tweet_info['username']}
 📝 <b>内容:</b> {self._escape_html(tweet_info['text'])}
 🕒 <b>时间:</b> {tweet_info['created_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}
+"""
 
-🔗 <a href=\"{tweet_info['url']}\">查看原推文</a>
-                                """.strip()
+                                # 如果有媒体，添加媒体信息
+                                if tweet_info.get('has_media', False):
+                                    media_urls = tweet_info.get('media_urls', [])
+                                    if media_urls:
+                                        tweet_message += f"\n📷 <b>媒体:</b> {len(media_urls)} 个文件"
+                                        for i, media_url in enumerate(media_urls[:3], 1):  # 最多显示3个
+                                            tweet_message += f"\n{i}. {media_url}"
+
+                                tweet_message += f"\n\n🔗 <a href=\"{tweet_info['url']}\">查看原推文</a>".strip()
 
                                 await context.bot.send_message(
                                     chat_id=self.chat_id,

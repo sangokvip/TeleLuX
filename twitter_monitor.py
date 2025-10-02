@@ -234,22 +234,23 @@ class TwitterMonitor:
             return []
 
     def get_tweet_by_id(self, tweet_id):
-        """根据推文ID获取推文详情"""
+        """根据推文ID获取推文详情（包含媒体信息）"""
         try:
             logger.info(f"获取推文详情: {tweet_id}")
-
-            # 获取推文信息
+            
+            # 获取推文信息，包含媒体扩展
             tweet = self.client.get_tweet(
                 id=tweet_id,
-                tweet_fields=['created_at', 'public_metrics', 'author_id'],
+                tweet_fields=['created_at', 'public_metrics', 'author_id', 'attachments'],
                 user_fields=['username', 'name'],
-                expansions=['author_id']
+                expansions=['author_id', 'attachments.media_keys'],
+                media_fields=['url', 'type', 'preview_image_url']
             )
-
+            
             if not tweet.data:
                 logger.error(f"推文不存在: {tweet_id}")
                 return None
-
+                
             # 获取作者信息
             author_username = "unknown"
             if tweet.includes and 'users' in tweet.includes:
@@ -257,17 +258,42 @@ class TwitterMonitor:
                     if user.id == tweet.data.author_id:
                         author_username = user.username
                         break
-
+            
+            # 获取媒体信息
+            media_urls = []
+            if tweet.includes and 'media' in tweet.includes:
+                for media in tweet.includes['media']:
+                    if media.type == 'photo' and hasattr(media, 'url'):
+                        media_urls.append(media.url)
+                    elif media.type == 'video' and hasattr(media, 'preview_image_url'):
+                        media_urls.append(media.preview_image_url)
+            
             tweet_info = {
                 'id': tweet.data.id,
                 'text': tweet.data.text,
                 'created_at': tweet.data.created_at,
                 'url': f"https://twitter.com/{author_username}/status/{tweet.data.id}",
                 'username': author_username,
-                'author_id': tweet.data.author_id
+                'author_id': tweet.data.author_id,
+                'media_urls': media_urls,  # 新增：媒体URL列表
+                'has_media': len(media_urls) > 0  # 新增：是否有媒体
             }
-
+            
             logger.info(f"成功获取推文: @{author_username} - {tweet.data.text[:50]}...")
+            if media_urls:
+                logger.info(f"推文包含 {len(media_urls)} 个媒体文件")
+                
+            return tweet_info
+            
+        except tweepy.NotFound:
+            logger.error(f"推文不存在或已被删除: {tweet_id}")
+            return None
+        except tweepy.Unauthorized:
+            logger.error(f"无权访问推文: {tweet_id}")
+            return None
+        except Exception as e:
+            logger.error(f"获取推文详情失败: {e}")
+            return None
             return tweet_info
 
         except tweepy.NotFound:
