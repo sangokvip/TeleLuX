@@ -48,6 +48,9 @@ class TeleLuXBot:
             
             logger.info(f"收到消息: '{message_text}' 来自: {user_name} (Chat ID: {chat_id}, 类型: {chat_type})")
             
+            admin_chat_id = Config.ADMIN_CHAT_ID
+            is_admin_chat = admin_chat_id and str(chat_id) == str(admin_chat_id)
+
             # 处理私聊消息
             if chat_type == 'private':
                 # 转发私信给管理员
@@ -117,6 +120,14 @@ class TeleLuXBot:
                     logger.info(f"🎉 收到私聊触发词'27'，已向群组发送业务介绍消息 (来自用户: {user_name})")
 
                 elif message_text.lower() == "clear":
+                    if not is_admin_chat:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="❌ 此命令仅管理员可用",
+                            parse_mode='HTML'
+                        )
+                        logger.warning(f"未经授权的清除命令尝试 (来自用户: {user_name}, Chat ID: {chat_id})")
+                        return
                     # 处理清除欢迎消息命令
                     await self._clear_welcome_messages(context)
 
@@ -130,11 +141,27 @@ class TeleLuXBot:
                     logger.info(f"🧹 收到私聊清除命令'clear'，已清除所有欢迎消息 (来自用户: {user_name})")
 
                 elif message_text.lower() == "blacklist":
+                    if not is_admin_chat:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="❌ 此命令仅管理员可用",
+                            parse_mode='HTML'
+                        )
+                        logger.warning(f"未经授权的黑名单查看尝试 (来自用户: {user_name}, Chat ID: {chat_id})")
+                        return
                     # 处理查看黑名单命令
                     await self._show_blacklist(context, chat_id)
                     logger.info(f"📋 收到私聊黑名单查看命令 (来自用户: {user_name})")
 
                 elif message_text.lower().startswith("unban "):
+                    if not is_admin_chat:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="❌ 此命令仅管理员可用",
+                            parse_mode='HTML'
+                        )
+                        logger.warning(f"未经授权的解封尝试 (来自用户: {user_name}, Chat ID: {chat_id})")
+                        return
                     # 处理从黑名单移除用户命令
                     try:
                         user_id_to_unban = int(message_text.split()[1])

@@ -90,7 +90,7 @@ class Config:
     CHECK_INTERVAL = 300  # 检查间隔（秒），默认5分钟
     
     # 数据库配置
-    DATABASE_PATH = 'tweets.db'
+    DATABASE_PATH = None
     
     @classmethod
     def _init_configs(cls):
@@ -111,9 +111,43 @@ class Config:
         cls.TWITTER_USERNAME = cls.get_config('TWITTER_USERNAME', required=True)  # 要监控的Twitter用户名
         cls.CHECK_INTERVAL = cls.get_int_config('CHECK_INTERVAL', 300)  # 检查间隔（秒），默认5分钟
         
-        # 数据库配置
+        # 数据库配置 - 融合两个版本的实现
         cls.DATABASE_PATH = cls.get_config('DATABASE_PATH', 'tweets.db')
     
+    @classmethod
+    def require_telegram(cls, require_chat_id=False, require_admin=False):
+        """
+        验证Telegram配置（来自远程版本的功能）
+        
+        Args:
+            require_chat_id: 是否需要聊天ID
+            require_admin: 是否需要管理员ID
+            
+        Returns:
+            True 如果配置完整
+            
+        Raises:
+            ValueError: 如果缺少必需配置
+        """
+        # 确保配置已初始化
+        if cls.TELEGRAM_BOT_TOKEN is None:
+            cls._init_configs()
+            
+        missing = []
+
+        if not cls.TELEGRAM_BOT_TOKEN:
+            missing.append('TELEGRAM_BOT_TOKEN')
+
+        if require_chat_id and not cls.TELEGRAM_CHAT_ID:
+            missing.append('TELEGRAM_CHAT_ID')
+
+        if require_admin and not cls.ADMIN_CHAT_ID:
+            missing.append('ADMIN_CHAT_ID')
+
+        if missing:
+            raise ValueError(f"缺少必要的Telegram配置: {', '.join(missing)}")
+
+        return True
     @classmethod
     def validate(cls):
         """验证必要的配置是否存在"""

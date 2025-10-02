@@ -58,8 +58,8 @@ async def main():
     print("=" * 50)
     
     try:
-        # 验证配置
-        Config.validate()
+        # 验证必要的Telegram配置
+        Config.require_telegram()
         print("✅ 配置验证通过")
         
         # 创建收集器

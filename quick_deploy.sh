@@ -164,4 +164,3 @@ fi
 echo ""
 echo "🎉 TeleLuX部署脚本执行完成！"
 echo "项目目录: $PROJECT_DIR"
-EOF
