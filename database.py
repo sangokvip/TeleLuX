@@ -93,10 +93,11 @@ class Database:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
+                # 使用参数化查询防止SQL注入
                 cursor.execute('''
                     DELETE FROM processed_tweets 
-                    WHERE processed_at < datetime('now', '-{} days')
-                '''.format(days))
+                    WHERE processed_at < datetime('now', '-' || ? || ' days')
+                ''', (days,))
                 deleted_count = cursor.rowcount
                 conn.commit()
                 logger.info(f"清理了 {deleted_count} 条旧记录")

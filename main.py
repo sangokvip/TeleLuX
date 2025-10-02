@@ -12,6 +12,7 @@ from telegram.ext import Application, MessageHandler, ChatMemberHandler, filters
 from config import Config
 from twitter_monitor import TwitterMonitor
 from database import Database
+from utils import utils, async_error_handler
 
 # 配置日志
 logging.basicConfig(
@@ -33,7 +34,8 @@ class TeleLuXBot:
         self.last_check_time = None
         self.last_business_intro_time = None
         self.last_business_intro_message_id = None
-        self.user_activity_log = {}  # 记录用户进群退群活动
+        # 使用内存管理器替代普通字典，防止内存无限增长
+        self.user_activity_manager = utils.MemoryManager(max_size=500, cleanup_threshold=0.8)
         self.welcome_messages = []  # 记录所有欢迎消息ID
         
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -467,9 +469,10 @@ class TeleLuXBot:
             username = user.username or "无用户名"
             current_time = datetime.now()
 
-            # 记录用户活动
-            if user_id not in self.user_activity_log:
-                self.user_activity_log[user_id] = {
+            # 记录用户活动 - 使用内存管理器
+            user_data = self.user_activity_manager.get(str(user_id))
+            if not user_data:
+                user_data = {
                     'user_name': user_name,
                     'username': username,
                     'join_times': [],
@@ -477,21 +480,22 @@ class TeleLuXBot:
                     'total_joins': 0,
                     'total_leaves': 0
                 }
+                self.user_activity_manager.add(str(user_id), user_data)
 
             # 更新用户信息（可能会变化）
-            self.user_activity_log[user_id]['user_name'] = user_name
-            self.user_activity_log[user_id]['username'] = username
+            user_data['user_name'] = user_name
+            user_data['username'] = username
 
             # 检查用户加入
             if old_status in ['left', 'kicked'] and new_status in ['member', 'administrator', 'creator']:
                 # 记录加入时间
-                self.user_activity_log[user_id]['join_times'].append(current_time)
-                self.user_activity_log[user_id]['total_joins'] += 1
+                user_data['join_times'].append(current_time)
+                user_data['total_joins'] += 1
 
                 logger.info(f"👋 用户加入: {user_name} (ID: {user_id}, 用户名: @{username})")
 
                 # 检查是否是重复进群用户（超过1次才通知）
-                if self.user_activity_log[user_id]['total_joins'] > 1:
+                if user_data['total_joins'] > 1:
                     await self._notify_repeat_user(user_id, 'join', context)
 
                 # 发送欢迎消息
@@ -521,20 +525,20 @@ class TeleLuXBot:
                     self.welcome_messages.append(welcome_info)
                     logger.info(f"📝 已记录欢迎消息: {user_name} (消息ID: {sent_message.message_id})")
 
-                # 安排1分钟后删除消息
+                # 安排8小时后删除消息（根据项目文档要求）
                 if sent_message:
                     try:
                         if context.job_queue:
                             context.job_queue.run_once(
                                 self._delete_welcome_message,
-                                when=60,  # 1分钟 = 60秒
+                                when=28800,  # 8小时 = 28800秒
                                 data={
                                     'chat_id': self.chat_id,
                                     'message_id': sent_message.message_id,
                                     'user_name': user_name
                                 }
                             )
-                            logger.info(f"⏰ 已安排1分钟后删除欢迎消息 (消息ID: {sent_message.message_id})")
+                            logger.info(f"⏰ 已安排8小时后删除欢迎消息 (消息ID: {sent_message.message_id})")
                         else:
                             logger.warning("JobQueue不可用，无法安排自动删除欢迎消息")
                     except Exception as e:
@@ -543,20 +547,20 @@ class TeleLuXBot:
             # 检查用户离开
             elif old_status in ['member', 'administrator', 'creator'] and new_status in ['left', 'kicked']:
                 # 记录离开时间
-                self.user_activity_log[user_id]['leave_times'].append(current_time)
-                self.user_activity_log[user_id]['total_leaves'] += 1
+                user_data['leave_times'].append(current_time)
+                user_data['total_leaves'] += 1
 
                 logger.info(f"👋 用户离开: {user_name} (ID: {user_id}, 用户名: @{username})")
 
                 # 检查是否是第二次离开，如果是则加入黑名单
-                if self.user_activity_log[user_id]['total_leaves'] >= 2:
+                if user_data['total_leaves'] >= 2:
                     # 添加到黑名单（移除黑名单检查，确保每次第二次离开都加入）
                     success = self.database.add_to_blacklist(
                         user_id=user_id,
                         user_name=user_name,
                         username=username,
-                        leave_count=self.user_activity_log[user_id]['total_leaves'],
-                        reason=f"多次离群 ({self.user_activity_log[user_id]['total_leaves']}次)"
+                        leave_count=user_data['total_leaves'],
+                        reason=f"多次离群 ({user_data['total_leaves']}次)"
                     )
                     
                     if success:
@@ -565,7 +569,7 @@ class TeleLuXBot:
                         logger.info(f"🚫 用户 {user_name} (ID: {user_id}) 因多次离群已自动加入黑名单")
 
                 # 如果用户离开超过1次，通知管理员
-                if self.user_activity_log[user_id]['total_leaves'] > 1:
+                if user_data['total_leaves'] > 1:
                     await self._notify_repeat_user(user_id, 'leave', context)
 
         except Exception as e:
@@ -574,7 +578,11 @@ class TeleLuXBot:
     async def _notify_repeat_user(self, user_id, action, context):
         """通知管理员用户的重复进群/退群行为"""
         try:
-            user_data = self.user_activity_log[user_id]
+            user_data = self.user_activity_manager.get(str(user_id))
+            if not user_data:
+                logger.warning(f"未找到用户活动数据: {user_id}")
+                return
+                
             user_name = user_data['user_name']
             username = user_data['username']
 
@@ -639,7 +647,11 @@ class TeleLuXBot:
     async def _notify_user_blacklisted(self, user_id, context):
         """通知管理员用户已被加入黑名单"""
         try:
-            user_data = self.user_activity_log[user_id]
+            user_data = self.user_activity_manager.get(str(user_id))
+            if not user_data:
+                logger.warning(f"未找到用户活动数据: {user_id}")
+                return
+                
             user_name = user_data['user_name']
             username = user_data['username']
 
@@ -735,52 +747,19 @@ class TeleLuXBot:
             ]
 
     def _escape_html(self, text):
-        """转义HTML特殊字符"""
-        if not text:
-            return ""
-        
-        html_escape_table = {
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            '"': "&quot;",
-            "'": "&#x27;",
-        }
-        
-        return "".join(html_escape_table.get(c, c) for c in text)
+        """转义HTML特殊字符 - 已弃用，请直接使用utils.escape_html()"""
+        # 为了向后兼容，调用utils模块的函数
+        import warnings
+        warnings.warn("_escape_html方法已弃用，请使用utils.escape_html()", DeprecationWarning, stacklevel=2)
+        return utils.escape_html(text)
 
     def _is_twitter_url(self, text):
-        """检查文本是否包含Twitter URL"""
-        import re
-
-        # Twitter URL模式
-        twitter_patterns = [
-            r'https?://(?:www\.)?twitter\.com/\w+/status/\d+',
-            r'https?://(?:www\.)?x\.com/\w+/status/\d+',
-            r'twitter\.com/\w+/status/\d+',
-            r'x\.com/\w+/status/\d+'
-        ]
-
-        for pattern in twitter_patterns:
-            if re.search(pattern, text, re.IGNORECASE):
-                return True
-        return False
+        """检查文本是否包含Twitter URL - 使用utils模块"""
+        return utils.is_twitter_url(text)
 
     def _extract_tweet_id(self, url):
-        """从Twitter URL中提取推文ID"""
-        import re
-
-        # 提取推文ID的模式
-        patterns = [
-            r'(?:twitter|x)\.com/\w+/status/(\d+)',
-            r'/status/(\d+)'
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, url, re.IGNORECASE)
-            if match:
-                return match.group(1)
-        return None
+        """从Twitter URL中提取推文ID - 使用utils模块"""
+        return utils.extract_tweet_id(url)
     
 
 

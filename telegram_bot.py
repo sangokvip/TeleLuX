@@ -4,6 +4,7 @@ from telegram import Bot, Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from telegram.error import TelegramError
 from config import Config
+from utils import utils
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +47,9 @@ class TelegramNotifier:
         if len(tweet_text) > max_text_length:
             tweet_text = tweet_text[:max_text_length] + "..."
         
-        # 转义HTML特殊字符
-        tweet_text = self._escape_html(tweet_text)
-        username = self._escape_html(username)
+        # 转义HTML特殊字符 - 使用utils模块
+        tweet_text = utils.escape_html(tweet_text)
+        username = utils.escape_html(username)
         
         message = f"""
 🐦 <b>新推文提醒</b>
@@ -63,19 +64,11 @@ class TelegramNotifier:
         return message
     
     def _escape_html(self, text):
-        """转义HTML特殊字符"""
-        if not text:
-            return ""
-        
-        html_escape_table = {
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            '"': "&quot;",
-            "'": "&#x27;",
-        }
-        
-        return "".join(html_escape_table.get(c, c) for c in text)
+        """转义HTML特殊字符 - 已弃用，请直接使用utils.escape_html()"""
+        # 为了向后兼容，调用utils模块的函数
+        import warnings
+        warnings.warn("_escape_html方法已弃用，请使用utils.escape_html()", DeprecationWarning, stacklevel=2)
+        return utils.escape_html(text)
     
     async def send_status_message(self, message):
         """发送状态消息"""
@@ -212,7 +205,7 @@ class TelegramBotListener:
                         message = f"""
 🐦 <b>@{username} 的最新推文</b>
 
-📝 <b>内容:</b> {self._escape_html(tweet['text'])}
+📝 <b>内容:</b> {utils.escape_html(tweet['text'])}
 🕒 <b>时间:</b> {tweet['created_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}
 
 🔗 <a href="{tweet['url']}">查看原推文</a>
