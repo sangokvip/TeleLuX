@@ -803,13 +803,13 @@ class TeleLuXBot:
                     (now - self.last_business_intro_time).total_seconds() < 60):
                     return
 
-                business_intro_message = """🌟 <b>露老师业务介绍</b> 🌟
+                business_intro_message = """🌟 <b>露老师门槛群介绍</b> 🌟
 
 小助理下单机器人： 👉https://t.me/Lulaoshi_bot
 
 ※平台是自助入群，机器人下单即可。
 
-如果不太会使用平台，或者遇到任何问题，可以私信我，或者私信露老师截图扫码支付：@mteacherlu。
+如果不太会使用平台，或者遇到任何问题，可以私信露老师：@mteacherlu （不接受闲聊，请理解）
 
 除门槛相关露老师个人电报私信不接受闲聊，禁砍价，不强迫入门，也请保持基本礼貌，感谢理解。
 
@@ -831,6 +831,8 @@ class TeleLuXBot:
 <b>三视角群：</b>不定期更新，每次活动拍摄由男友视角随心拍摄。
 
 <b>定制视频：</b>根据需求定制露老师视频，可SOLO、FM、FF、FFM、FMM，可按要求使用各种玩具和剧情设计。
+
+小助理下单机器人： 👉https://t.me/Lulaoshi_bot
 
 ※希望得到更详细介绍询问请私信"""
 
