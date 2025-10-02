@@ -35,7 +35,8 @@ class TeleLuXBot:
         self.last_business_intro_time = None
         self.last_business_intro_message_id = None
         # 使用内存管理器替代普通字典，防止内存无限增长
-        self.user_activity_manager = utils.MemoryManager(max_size=500, cleanup_threshold=0.8)
+        from utils import MemoryManager
+        self.user_activity_manager = MemoryManager(max_size=500, cleanup_threshold=0.8)
         self.welcome_messages = []  # 记录所有欢迎消息ID
         
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
