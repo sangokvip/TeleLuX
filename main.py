@@ -561,20 +561,20 @@ class TeleLuXBot:
                     self.welcome_messages.append(welcome_info)
                     logger.info(f"📝 已记录欢迎消息: {user_name} (消息ID: {sent_message.message_id})")
 
-                # 安排8小时后删除消息（根据项目文档要求）
+                # 安排1分钟后删除消息（根据用户需求）
                 if sent_message:
                     try:
                         if context.job_queue:
                             context.job_queue.run_once(
                                 self._delete_welcome_message,
-                                when=28800,  # 8小时 = 28800秒
+                                when=60,  # 1分钟 = 60秒
                                 data={
                                     'chat_id': self.chat_id,
                                     'message_id': sent_message.message_id,
                                     'user_name': user_name
                                 }
                             )
-                            logger.info(f"⏰ 已安排8小时后删除欢迎消息 (消息ID: {sent_message.message_id})")
+                            logger.info(f"⏰ 已安排1分钟后删除欢迎消息 (消息ID: {sent_message.message_id})")
                         else:
                             logger.warning("JobQueue不可用，无法安排自动删除欢迎消息")
                     except Exception as e:
