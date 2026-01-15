@@ -279,17 +279,6 @@ class TwitterMonitor:
         except Exception as e:
             logger.error(f"获取推文详情失败: {e}")
             return None
-            return tweet_info
-
-        except tweepy.NotFound:
-            logger.error(f"推文不存在或已被删除: {tweet_id}")
-            return None
-        except tweepy.Unauthorized:
-            logger.error(f"无权访问推文: {tweet_id}")
-            return None
-        except Exception as e:
-            logger.error(f"获取推文详情失败: {e}")
-            return None
     
     def check_new_tweets(self, username):
         """检查新推文"""

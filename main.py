@@ -6,7 +6,8 @@ TeleLuX - Twitter监控和Telegram通知系统
 
 import asyncio
 import logging
-from datetime import datetime
+import random
+from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import Application, MessageHandler, ChatMemberHandler, filters, ContextTypes
 from config import Config
@@ -34,10 +35,49 @@ class TeleLuXBot:
         self.last_check_time = None
         self.last_business_intro_time = None
         self.last_business_intro_message_id = None
+        self.last_twitter_check_time = None  # Twitter监控上次检查时间
+        # 免费API限额优化：默认8小时检查一次 (100条/月 ≈ 3次/天)
+        self.twitter_check_interval = max(Config.CHECK_INTERVAL, 28800)  # 最小8小时
+        self.twitter_api_calls_today = 0  # 今日API调用次数
+        self.twitter_api_reset_date = datetime.now().date()  # API计数重置日期
+        # 统计数据
+        self.stats = {
+            'start_time': datetime.now(),
+            'tweets_sent': 0,
+            'welcome_sent': 0,
+            'users_joined': 0,
+            'users_left': 0,
+            'commands_processed': 0,
+            'errors': 0
+        }
         # 使用内存管理器替代普通字典，防止内存无限增长
         from utils import MemoryManager
         self.user_activity_manager = MemoryManager(max_size=500, cleanup_threshold=0.8)
         self.welcome_messages = []  # 记录所有欢迎消息ID
+        self.activity_logs = []  # 操作日志记录
+        # 入群验证配置
+        self.pending_verifications = {}  # 待验证用户 {user_id: {'expires': datetime, 'code': str}}
+        self.verification_enabled = True  # 是否启用入群验证
+        self.verification_timeout = 300  # 验证超时时间(秒)
+        # 广告检测配置
+        self.ad_keywords = [
+            '加微信', '加v', '加V', 'wx:', 'WX:', '微信号', '微信：',
+            '免费领取', '免费赠送', '点击链接', '点击进入',
+            '赚钱', '日入', '月入', '日赚', '月赚', '轻松月入',
+            '兑换码', '优惠券', '押金', '押金群',
+            't.me/', 'telegram.me/', '@', 'http://', 'https://'
+        ]
+        self.ad_detection_enabled = True  # 是否启用广告检测
+        # 智能回复配置
+        self.auto_replies = {
+            '价格': '💰 关于价格请私信露老师 @mteacherlu 或使用机器人 https://t.me/Lulaoshi_bot',
+            '多少钱': '💰 关于价格请私信露老师 @mteacherlu 或使用机器人 https://t.me/Lulaoshi_bot',
+            '怎么加入': '👉 请使用机器人下单 https://t.me/Lulaoshi_bot',
+            '如何加入': '👉 请使用机器人下单 https://t.me/Lulaoshi_bot',
+            '怎么进群': '👉 请使用机器人下单 https://t.me/Lulaoshi_bot',
+            '求进群': '👉 请使用机器人下单 https://t.me/Lulaoshi_bot',
+        }
+        self.auto_reply_enabled = True  # 是否启用智能回复
         
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理收到的消息"""
@@ -175,6 +215,66 @@ class TeleLuXBot:
                             parse_mode='HTML'
                         )
 
+                elif message_text.lower() == "stats":
+                    if not is_admin_chat:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="❌ 此命令仅管理员可用",
+                            parse_mode='HTML'
+                        )
+                        return
+                    await self.handle_stats_command(chat_id, context)
+                    logger.info(f"📊 收到统计查看命令 (来自用户: {user_name})")
+
+                elif message_text.lower() == "logs":
+                    if not is_admin_chat:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="❌ 此命令仅管理员可用",
+                            parse_mode='HTML'
+                        )
+                        return
+                    await self.handle_logs_command(chat_id, context)
+                    logger.info(f"📋 收到日志查看命令 (来自用户: {user_name})")
+
+                elif message_text.lower() == "help":
+                    await self.handle_help_command(chat_id, context, is_admin=is_admin_chat)
+                    logger.info(f"❓ 收到帮助命令 (来自用户: {user_name})")
+
+                elif message_text.lower() == "check":
+                    if not is_admin_chat:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="❌ 此命令仅管理员可用",
+                            parse_mode='HTML'
+                        )
+                        return
+                    await self.handle_check_command(chat_id, context)
+                    logger.info(f"🔍 收到手动检查命令 (来自用户: {user_name})")
+
+                elif message_text.lower().startswith("setinterval "):
+                    if not is_admin_chat:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="❌ 此命令仅管理员可用",
+                            parse_mode='HTML'
+                        )
+                        return
+                    interval_str = message_text.split()[1] if len(message_text.split()) > 1 else ""
+                    await self.handle_setinterval_command(chat_id, context, interval_str)
+
+                elif message_text.lower().startswith("toggle "):
+                    if not is_admin_chat:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="❌ 此命令仅管理员可用",
+                            parse_mode='HTML'
+                        )
+                        return
+                    feature = message_text.lower().split()[1] if len(message_text.split()) > 1 else ""
+                    await self._toggle_feature(chat_id, context, feature)
+                    logger.info(f"⏱️ 收到设置间隔命令 (来自用户: {user_name})")
+
                 elif self._is_twitter_url(message_text):
                     # 处理私信发送的Twitter URL
                     if self.twitter_monitor:
@@ -274,7 +374,33 @@ class TeleLuXBot:
                     logger.info(f"收到私聊消息'{message_text}'，已回复提示信息 (来自用户: {user_name})")
             # 处理群组消息
             elif str(chat_id) == str(self.chat_id):
-                # 群组消息不再触发推文获取，只记录日志
+                user_id = update.effective_user.id
+                
+                # 检查是否是待验证用户的验证消息
+                if self.verification_enabled and str(user_id) in self.pending_verifications:
+                    await self._handle_verification(update, context, user_id, message_text)
+                    return
+                
+                # 广告检测
+                if self.ad_detection_enabled:
+                    is_ad, matched_keyword = self._detect_ad(message_text)
+                    if is_ad:
+                        await self._handle_ad_message(update, context, user_id, user_name, matched_keyword)
+                        return
+                
+                # 智能回复
+                if self.auto_reply_enabled:
+                    reply = self._get_auto_reply(message_text)
+                    if reply:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=reply,
+                            parse_mode='HTML',
+                            reply_to_message_id=update.message.message_id
+                        )
+                        self._log_activity('auto_reply', f"触发词: {message_text[:20]}")
+                        return
+                
                 logger.info(f"收到群组消息: '{message_text}' 来自: {user_name}")
             else:
                 # 忽略其他群组的消息
@@ -347,10 +473,10 @@ class TeleLuXBot:
             success = self.database.remove_from_blacklist(user_id)
             
             if success:
-                # 获取用户信息（如果在活动日志中）
+                # 获取用户信息（如果在活动管理器中）
                 user_info = ""
-                if user_id in self.user_activity_log:
-                    user_data = self.user_activity_log[user_id]
+                user_data = self.user_activity_manager.get(str(user_id))
+                if user_data:
                     user_info = f" ({user_data['user_name']})"
 
                 await context.bot.send_message(
@@ -529,6 +655,8 @@ class TeleLuXBot:
                 user_data['total_joins'] += 1
 
                 logger.info(f"👋 用户加入: {user_name} (ID: {user_id}, 用户名: @{username})")
+                self.stats['users_joined'] += 1
+                self._log_activity('user_joined', f"{user_name} (ID: {user_id})")
 
                 # 检查是否是重复进群用户（超过1次才通知）
                 if user_data['total_joins'] > 1:
@@ -554,6 +682,7 @@ class TeleLuXBot:
                     text=welcome_message,
                     parse_mode='HTML'
                 )
+                self.stats['welcome_sent'] += 1
 
                 # 记录欢迎消息信息
                 if sent_message:
@@ -593,6 +722,8 @@ class TeleLuXBot:
                 user_data['total_leaves'] += 1
 
                 logger.info(f"👋 用户离开: {user_name} (ID: {user_id}, 用户名: @{username})")
+                self.stats['users_left'] += 1
+                self._log_activity('user_left', f"{user_name} (ID: {user_id})")
 
                 # 检查是否是第二次离开，如果是则加入黑名单
                 if user_data['total_leaves'] >= 2:
@@ -752,6 +883,215 @@ class TeleLuXBot:
         except Exception as e:
             logger.error(f"处理黑名单通知时发生错误: {e}")
 
+    def _detect_ad(self, text: str) -> tuple:
+        """检测消息是否为广告
+        Returns: (is_ad: bool, matched_keyword: str)
+        """
+        if not text:
+            return False, ""
+        
+        text_lower = text.lower()
+        
+        # 检查广告关键词
+        for keyword in self.ad_keywords:
+            if keyword.lower() in text_lower:
+                # 排除白名单（群主相关链接）
+                whitelist = ['t.me/lulaoshi_bot', 't.me/mteacherlu', '@mteacherlu', 'x.com/xiuchiluchu910']
+                is_whitelisted = any(w in text_lower for w in whitelist)
+                if not is_whitelisted:
+                    return True, keyword
+        
+        return False, ""
+
+    def _get_auto_reply(self, text: str) -> str:
+        """获取智能回复内容"""
+        if not text:
+            return ""
+        
+        text_lower = text.lower()
+        for keyword, reply in self.auto_replies.items():
+            if keyword in text_lower:
+                return reply
+        
+        return ""
+
+    async def _handle_ad_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                                  user_id: int, user_name: str, matched_keyword: str):
+        """处理广告消息"""
+        try:
+            message_id = update.message.message_id
+            
+            # 删除广告消息
+            try:
+                await context.bot.delete_message(
+                    chat_id=self.chat_id,
+                    message_id=message_id
+                )
+                logger.info(f"🗑️ 已删除疑似广告消息 (用户: {user_name}, 关键词: {matched_keyword})")
+            except Exception as e:
+                logger.warning(f"删除广告消息失败: {e}")
+            
+            # 记录日志
+            self._log_activity('ad_deleted', f"用户: {user_name}, 关键词: {matched_keyword}")
+            self.stats['commands_processed'] += 1
+            
+            # 通知管理员
+            admin_chat_id = Config.ADMIN_CHAT_ID
+            if admin_chat_id:
+                ad_notice = f"""⚠️ <b>广告检测警报</b>
+
+👤 <b>用户:</b> {utils.escape_html(user_name)}
+🆔 <b>用户ID:</b> <code>{user_id}</code>
+🔍 <b>触发词:</b> {utils.escape_html(matched_keyword)}
+📝 <b>消息内容:</b>
+{utils.escape_html(update.message.text[:200])}...
+
+✅ 消息已自动删除"""
+                
+                await context.bot.send_message(
+                    chat_id=admin_chat_id,
+                    text=ad_notice,
+                    parse_mode='HTML'
+                )
+                
+        except Exception as e:
+            logger.error(f"处理广告消息失败: {e}")
+
+    async def _handle_verification(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                                    user_id: int, message_text: str):
+        """处理入群验证"""
+        try:
+            verification = self.pending_verifications.get(str(user_id))
+            if not verification:
+                return
+            
+            # 检查是否超时
+            if datetime.now() > verification['expires']:
+                del self.pending_verifications[str(user_id)]
+                # 踢出超时用户
+                try:
+                    await context.bot.ban_chat_member(
+                        chat_id=self.chat_id,
+                        user_id=user_id
+                    )
+                    await context.bot.unban_chat_member(
+                        chat_id=self.chat_id,
+                        user_id=user_id
+                    )
+                    logger.info(f"⏰ 用户 {user_id} 验证超时，已移除")
+                except Exception as e:
+                    logger.error(f"移除超时用户失败: {e}")
+                return
+            
+            # 检查验证码
+            if message_text.strip() == verification['code']:
+                # 验证成功
+                del self.pending_verifications[str(user_id)]
+                
+                # 删除验证消息
+                try:
+                    await context.bot.delete_message(
+                        chat_id=self.chat_id,
+                        message_id=update.message.message_id
+                    )
+                except:
+                    pass
+                
+                await context.bot.send_message(
+                    chat_id=self.chat_id,
+                    text=f"✅ <b>{utils.escape_html(update.effective_user.first_name)}</b> 验证成功，欢迎加入！",
+                    parse_mode='HTML'
+                )
+                self._log_activity('verification_passed', f"用户ID: {user_id}")
+                logger.info(f"✅ 用户 {user_id} 验证成功")
+            else:
+                # 验证失败，删除错误消息
+                try:
+                    await context.bot.delete_message(
+                        chat_id=self.chat_id,
+                        message_id=update.message.message_id
+                    )
+                except:
+                    pass
+                    
+        except Exception as e:
+            logger.error(f"处理验证失败: {e}")
+
+    async def _send_verification_challenge(self, context: ContextTypes.DEFAULT_TYPE, 
+                                            user_id: int, user_name: str):
+        """发送入群验证挑战"""
+        # 生成简单的数学验证码
+        a, b = random.randint(1, 10), random.randint(1, 10)
+        code = str(a + b)
+        
+        # 记录待验证信息
+        self.pending_verifications[str(user_id)] = {
+            'code': code,
+            'expires': datetime.now() + timedelta(seconds=self.verification_timeout)
+        }
+        
+        verification_message = f"""🔐 <b>入群验证</b>
+
+👋 你好 <b>{utils.escape_html(user_name)}</b>！
+
+请在 {self.verification_timeout // 60} 分钟内回答以下问题完成验证：
+
+❓ <b>{a} + {b} = ?</b>
+
+⚠️ 超时未验证将被自动移出群组"""
+
+        sent = await context.bot.send_message(
+            chat_id=self.chat_id,
+            text=verification_message,
+            parse_mode='HTML'
+        )
+        
+        # 安排超时检查
+        if self.application.job_queue:
+            self.application.job_queue.run_once(
+                self._check_verification_timeout,
+                when=self.verification_timeout,
+                data={'user_id': user_id, 'message_id': sent.message_id}
+            )
+
+    async def _check_verification_timeout(self, context: ContextTypes.DEFAULT_TYPE):
+        """检查验证是否超时"""
+        try:
+            job_data = context.job.data
+            user_id = job_data['user_id']
+            message_id = job_data['message_id']
+            
+            # 如果用户还在待验证列表中，说明超时了
+            if str(user_id) in self.pending_verifications:
+                del self.pending_verifications[str(user_id)]
+                
+                # 删除验证消息
+                try:
+                    await context.bot.delete_message(
+                        chat_id=self.chat_id,
+                        message_id=message_id
+                    )
+                except:
+                    pass
+                
+                # 踢出用户
+                try:
+                    await context.bot.ban_chat_member(
+                        chat_id=self.chat_id,
+                        user_id=user_id
+                    )
+                    await context.bot.unban_chat_member(
+                        chat_id=self.chat_id,
+                        user_id=user_id
+                    )
+                    logger.info(f"⏰ 用户 {user_id} 验证超时，已移除")
+                    self._log_activity('verification_timeout', f"用户ID: {user_id}")
+                except Exception as e:
+                    logger.error(f"移除超时用户失败: {e}")
+                    
+        except Exception as e:
+            logger.error(f"检查验证超时失败: {e}")
+
     async def _delete_welcome_message(self, context: ContextTypes.DEFAULT_TYPE):
         """删除欢迎消息的回调函数"""
         try:
@@ -804,6 +1144,322 @@ class TeleLuXBot:
         return utils.extract_tweet_id(url)
     
 
+
+    def _log_activity(self, action: str, details: str = ""):
+        """记录操作日志"""
+        log_entry = {
+            'time': datetime.now(),
+            'action': action,
+            'details': details
+        }
+        self.activity_logs.append(log_entry)
+        # 只保留最近100条日志
+        if len(self.activity_logs) > 100:
+            self.activity_logs = self.activity_logs[-100:]
+
+    async def check_twitter_updates(self):
+        """检查Twitter新推文并自动发送到群组"""
+        try:
+            now = datetime.now()
+            
+            # 检查是否到了检查时间
+            if self.last_twitter_check_time:
+                elapsed = (now - self.last_twitter_check_time).total_seconds()
+                if elapsed < self.twitter_check_interval:
+                    return  # 还没到检查时间
+            
+            # 更新检查时间
+            self.last_twitter_check_time = now
+            
+            if not self.twitter_monitor:
+                logger.warning("Twitter监控未初始化")
+                return
+            
+            username = Config.TWITTER_USERNAME
+            logger.info(f"🔍 检查 @{username} 的新推文...")
+            
+            # 获取新推文
+            new_tweets = self.twitter_monitor.check_new_tweets(username)
+            
+            if new_tweets:
+                logger.info(f"📢 发现 {len(new_tweets)} 条新推文")
+                
+                for tweet in new_tweets:
+                    try:
+                        # 构建推文消息
+                        tweet_message = f"""🐦 <b>@{username} 发布了新推文</b>
+
+📝 <b>内容:</b>
+{utils.escape_html(tweet['text'])}
+
+🕒 <b>时间:</b> {tweet['created_at'].strftime('%Y-%m-%d %H:%M:%S') if hasattr(tweet['created_at'], 'strftime') else tweet['created_at']}
+
+🔗 <a href="{tweet['url']}">查看原推文</a>"""
+
+                        # 发送到群组
+                        await self.application.bot.send_message(
+                            chat_id=self.chat_id,
+                            text=tweet_message,
+                            parse_mode='HTML',
+                            disable_web_page_preview=False
+                        )
+                        
+                        self.stats['tweets_sent'] += 1
+                        self._log_activity('tweet_sent', f"推文ID: {tweet['id']}")
+                        logger.info(f"✅ 已发送推文到群组: {tweet['id']}")
+                        
+                        # 避免发送过快
+                        await asyncio.sleep(1)
+                        
+                    except Exception as e:
+                        logger.error(f"发送推文失败: {e}")
+                        self.stats['errors'] += 1
+            else:
+                logger.info(f"📭 @{username} 暂无新推文")
+                
+        except Exception as e:
+            logger.error(f"检查Twitter更新失败: {e}")
+            self.stats['errors'] += 1
+
+    async def _toggle_feature(self, chat_id, context, feature: str):
+        """切换功能开关"""
+        try:
+            feature_map = {
+                'verification': ('verification_enabled', '入群验证'),
+                'verify': ('verification_enabled', '入群验证'),
+                'ad': ('ad_detection_enabled', '广告检测'),
+                'ads': ('ad_detection_enabled', '广告检测'),
+                'reply': ('auto_reply_enabled', '智能回复'),
+                'autoreply': ('auto_reply_enabled', '智能回复'),
+            }
+            
+            if feature not in feature_map:
+                features_list = "\n".join([f"• <code>{k}</code> - {v[1]}" for k, v in feature_map.items()])
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"❌ 未知功能: {feature}\n\n可用功能:\n{features_list}",
+                    parse_mode='HTML'
+                )
+                return
+            
+            attr_name, display_name = feature_map[feature]
+            current_value = getattr(self, attr_name)
+            new_value = not current_value
+            setattr(self, attr_name, new_value)
+            
+            status = "✅ 已开启" if new_value else "❌ 已关闭"
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🔧 <b>{display_name}</b> {status}",
+                parse_mode='HTML'
+            )
+            
+            self._log_activity('feature_toggled', f"{display_name}: {new_value}")
+            self.stats['commands_processed'] += 1
+            
+        except Exception as e:
+            logger.error(f"切换功能失败: {e}")
+            self.stats['errors'] += 1
+
+    async def handle_stats_command(self, chat_id, context):
+        """处理统计命令"""
+        try:
+            uptime = datetime.now() - self.stats['start_time']
+            days = uptime.days
+            hours, remainder = divmod(uptime.seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            
+            # 获取数据库统计
+            processed_tweets = self.database.get_processed_tweets_count() if self.database else 0
+            blacklist_count = self.database.get_blacklist_count() if self.database else 0
+            
+            stats_message = f"""📊 <b>TeleLuX 运行统计</b>
+
+⏱️ <b>运行时长:</b> {days}天 {hours}小时 {minutes}分钟
+
+📈 <b>本次运行统计:</b>
+• 发送推文: {self.stats['tweets_sent']} 条
+• 欢迎消息: {self.stats['welcome_sent']} 条
+• 用户加入: {self.stats['users_joined']} 人
+• 用户离开: {self.stats['users_left']} 人
+• 命令处理: {self.stats['commands_processed']} 次
+• 错误次数: {self.stats['errors']} 次
+
+💾 <b>数据库统计:</b>
+• 已处理推文: {processed_tweets} 条
+• 黑名单用户: {blacklist_count} 人
+
+🔧 <b>系统配置:</b>
+• 监控用户: @{Config.TWITTER_USERNAME}
+• 检查间隔: {self.twitter_check_interval} 秒
+• 启动时间: {self.stats['start_time'].strftime('%Y-%m-%d %H:%M:%S')}"""
+
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=stats_message,
+                parse_mode='HTML'
+            )
+            self.stats['commands_processed'] += 1
+            self._log_activity('stats_viewed', f"Chat ID: {chat_id}")
+            
+        except Exception as e:
+            logger.error(f"获取统计信息失败: {e}")
+            self.stats['errors'] += 1
+
+    async def handle_logs_command(self, chat_id, context, count=10):
+        """处理日志查询命令"""
+        try:
+            if not self.activity_logs:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="📋 暂无操作日志记录",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # 获取最近的日志
+            recent_logs = self.activity_logs[-count:]
+            recent_logs.reverse()  # 最新的在前
+            
+            logs_text = "📋 <b>最近操作日志</b>\n\n"
+            for i, log in enumerate(recent_logs, 1):
+                time_str = log['time'].strftime('%m-%d %H:%M:%S')
+                logs_text += f"{i}. [{time_str}] <b>{log['action']}</b>\n"
+                if log['details']:
+                    logs_text += f"   {log['details']}\n"
+            
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=logs_text,
+                parse_mode='HTML'
+            )
+            self.stats['commands_processed'] += 1
+            
+        except Exception as e:
+            logger.error(f"获取日志失败: {e}")
+            self.stats['errors'] += 1
+
+    async def handle_help_command(self, chat_id, context, is_admin=False):
+        """处理帮助命令"""
+        try:
+            help_message = """📖 <b>TeleLuX 命令帮助</b>
+
+💡 <b>基础命令:</b>
+• <code>27</code> - 发送业务介绍到群组
+• <code>help</code> - 显示此帮助信息
+• 发送 Twitter URL - 分享推文到群组"""
+
+            if is_admin:
+                help_message += """
+
+🔐 <b>管理员命令:</b>
+• <code>stats</code> - 查看运行统计
+• <code>logs</code> - 查看最近操作日志
+• <code>clear</code> - 清除所有欢迎消息
+• <code>blacklist</code> - 查看黑名单
+• <code>unban 用户ID</code> - 解除用户封禁
+• <code>check</code> - 立即检查Twitter更新
+• <code>setinterval 秒数</code> - 设置检查间隔
+
+🔧 <b>功能开关:</b>
+• <code>toggle verify</code> - 入群验证开关
+• <code>toggle ad</code> - 广告检测开关
+• <code>toggle reply</code> - 智能回复开关"""
+
+            # 功能状态
+            verify_status = "✅" if self.verification_enabled else "❌"
+            ad_status = "✅" if self.ad_detection_enabled else "❌"
+            reply_status = "✅" if self.auto_reply_enabled else "❌"
+            
+            help_message += f"""
+
+📝 <b>支持的URL格式:</b>
+• https://twitter.com/用户名/status/推文ID
+• https://x.com/用户名/status/推文ID
+
+🔧 <b>当前配置:</b>
+• 监控用户: @{Config.TWITTER_USERNAME}
+• 检查间隔: {self.twitter_check_interval // 3600} 小时
+• 入群验证: {verify_status}
+• 广告检测: {ad_status}
+• 智能回复: {reply_status}"""
+
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=help_message,
+                parse_mode='HTML'
+            )
+            self.stats['commands_processed'] += 1
+            
+        except Exception as e:
+            logger.error(f"发送帮助信息失败: {e}")
+            self.stats['errors'] += 1
+
+    async def handle_check_command(self, chat_id, context):
+        """立即检查Twitter更新"""
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🔍 正在检查 @{Config.TWITTER_USERNAME} 的新推文...",
+                parse_mode='HTML'
+            )
+            
+            # 重置上次检查时间以强制检查
+            self.last_twitter_check_time = None
+            await self.check_twitter_updates()
+            
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="✅ 检查完成",
+                parse_mode='HTML'
+            )
+            self.stats['commands_processed'] += 1
+            self._log_activity('manual_check', f"由管理员触发")
+            
+        except Exception as e:
+            logger.error(f"手动检查失败: {e}")
+            self.stats['errors'] += 1
+
+    async def handle_setinterval_command(self, chat_id, context, interval_str):
+        """设置Twitter检查间隔"""
+        try:
+            interval = int(interval_str)
+            if interval < 60:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="❌ 检查间隔不能小于60秒",
+                    parse_mode='HTML'
+                )
+                return
+            
+            if interval > 86400:  # 24小时
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="❌ 检查间隔不能大于86400秒(24小时)",
+                    parse_mode='HTML'
+                )
+                return
+            
+            old_interval = self.twitter_check_interval
+            self.twitter_check_interval = interval
+            
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"✅ 检查间隔已更新\n\n• 旧间隔: {old_interval} 秒\n• 新间隔: {interval} 秒",
+                parse_mode='HTML'
+            )
+            self.stats['commands_processed'] += 1
+            self._log_activity('interval_changed', f"{old_interval}s -> {interval}s")
+            
+        except ValueError:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="❌ 请输入有效的数字，例如: setinterval 300",
+                parse_mode='HTML'
+            )
+        except Exception as e:
+            logger.error(f"设置间隔失败: {e}")
+            self.stats['errors'] += 1
 
     async def check_business_intro_schedule(self):
         """检查是否需要发送定时业务介绍"""
@@ -947,23 +1603,26 @@ async def main():
         await bot.start_bot()
         
         # 发送启动通知
-        startup_message = f"""🚀 TeleLuX推文分享版已启动！
+        startup_message = f"""🚀 <b>TeleLuX 完整版已启动！</b>
 
-📊 <b>功能说明:</b>
-• 自动欢迎新用户 (1分钟后自动删除)
-• 定时业务介绍: 每3小时整点 (自动删除上一条)
-• Twitter推文分享功能
-• 用户进群退群行为监控
-• 私信消息转发给管理员
+📊 <b>核心功能:</b>
+• 🐦 <b>Twitter自动监控</b>: @{Config.TWITTER_USERNAME}
+• ⏱️ 检查间隔: {bot.twitter_check_interval} 秒
+• 👋 自动欢迎新用户 (1分钟后删除)
+• 📢 定时业务介绍: 每3小时整点
+• 👥 用户进群退群行为监控
+• 📨 私信消息转发给管理员
 
-💡 <b>私聊功能:</b>
-• 发送 '27' - 向群组发送业务介绍
-• 发送 'clear' - 清除群内所有欢迎消息
-• 发送 Twitter URL - 分享推文到群组
+💡 <b>私聊命令:</b>
+• <code>27</code> - 发送业务介绍
+• <code>help</code> - 查看帮助
+• 发送 Twitter URL - 分享推文
 
-📝 <b>支持的URL格式:</b>
-• https://twitter.com/用户名/status/推文ID
-• https://x.com/用户名/status/推文ID
+🔐 <b>管理员命令:</b>
+• <code>stats</code> - 查看统计
+• <code>logs</code> - 查看日志
+• <code>check</code> - 立即检查推文
+• <code>setinterval 秒数</code> - 设置间隔
 
 🎉 <b>系统状态:</b> 运行中"""
         
@@ -973,15 +1632,19 @@ async def main():
             parse_mode='HTML'
         )
         
-        logger.info("💡 现在可以私聊机器人发送'27'(业务介绍)或Twitter URL(分享推文)！")
+        logger.info(f"🐦 Twitter监控已启动: @{Config.TWITTER_USERNAME}, 间隔: {bot.twitter_check_interval}秒")
+        logger.info("💡 私聊机器人发送 'help' 查看所有命令")
         
-        # 保持运行并定期检查定时业务介绍
+        # 保持运行并定期检查
         try:
             while True:
+                # 检查Twitter更新
+                await bot.check_twitter_updates()
+                
                 # 检查定时业务介绍
                 await bot.check_business_intro_schedule()
 
-                await asyncio.sleep(60)  # 每分钟检查一次定时任务
+                await asyncio.sleep(30)  # 每30秒检查一次
         except KeyboardInterrupt:
             logger.info("\n⏹️  收到停止信号")
         finally:
