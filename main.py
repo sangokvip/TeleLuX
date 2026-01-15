@@ -684,6 +684,9 @@ class TeleLuXBot:
                 )
                 self.stats['welcome_sent'] += 1
 
+                # 自动私信新用户解锁敏感内容说明
+                await self._send_new_user_guide(context, user_id, user_name)
+
                 # 记录欢迎消息信息
                 if sent_message:
                     welcome_info = {
@@ -1091,6 +1094,54 @@ class TeleLuXBot:
                     
         except Exception as e:
             logger.error(f"检查验证超时失败: {e}")
+
+    async def _send_new_user_guide(self, context: ContextTypes.DEFAULT_TYPE, user_id: int, user_name: str):
+        """自动私信新用户解锁敏感内容说明"""
+        try:
+            guide_message = f"""👋 <b>你好 {utils.escape_html(user_name)}！欢迎加入露老师聊天群！</b>
+
+⚠️ <b>重要提示：</b>如果您进群后看不到群内容（因为是敏感内容），请按以下步骤解锁：
+
+📱 <b>解锁步骤：</b>
+1️⃣ 用浏览器打开 Telegram 网页版：
+👉 <a href="https://web.telegram.org/">https://web.telegram.org/</a>
+
+2️⃣ 登录后点击左上角的 <b>Settings</b>（设置）
+
+3️⃣ 找到 <b>"Show Sensitive Content"</b> 选项并打勾 ✅
+
+4️⃣ 退出登录（包括手机App）
+
+5️⃣ 重新登录，重新加群即可解封！
+
+━━━━━━━━━━━━━━━━━━━━
+
+🛒 <b>下单购买请使用小助理机器人：</b>
+👉 <a href="https://t.me/Lulaoshi_bot">https://t.me/Lulaoshi_bot</a>
+
+━━━━━━━━━━━━━━━━━━━━
+
+🔍 <b>认准露老师唯一账号：</b>
+• X账号：<a href="https://x.com/xiuchiluchu910"><b>@xiuchiluchu910</b></a>
+• Telegram账号：<a href="https://t.me/mteacherlu"><b>@mteacherlu</b></a>
+
+⚠️ 请勿轻易相信任何陌生人，谨防诈骗！"""
+
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=guide_message,
+                parse_mode='HTML',
+                disable_web_page_preview=True
+            )
+            logger.info(f"📨 已向新用户 {user_name} (ID: {user_id}) 发送入群指南私信")
+            self._log_activity('guide_sent', f"用户: {user_name} (ID: {user_id})")
+            
+        except Exception as e:
+            # 用户可能禁止了机器人私信，记录但不报错
+            if "bot can't initiate" in str(e).lower() or "forbidden" in str(e).lower():
+                logger.warning(f"⚠️ 无法向用户 {user_name} (ID: {user_id}) 发送私信 - 用户可能未启动机器人")
+            else:
+                logger.error(f"发送新用户指南私信失败: {e}")
 
     async def _delete_welcome_message(self, context: ContextTypes.DEFAULT_TYPE):
         """删除欢迎消息的回调函数"""
