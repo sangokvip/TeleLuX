@@ -3,9 +3,10 @@
 工具模块 - 提供通用的工具函数
 """
 
+import asyncio
 import re
 import logging
-from functools import wraps
+from functools import wraps, partial
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -212,6 +213,19 @@ def async_error_handler(func):
             logger.error(f"异步函数 {func.__name__} 执行失败: {e}")
             return None
     return wrapper
+
+
+async def run_in_thread(func, *args, **kwargs):
+    to_thread = getattr(asyncio, 'to_thread', None)
+    if callable(to_thread):
+        return await to_thread(func, *args, **kwargs)
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.get_event_loop()
+
+    return await loop.run_in_executor(None, partial(func, *args, **kwargs))
 
 
 class MemoryManager:

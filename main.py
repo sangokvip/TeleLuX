@@ -13,7 +13,7 @@ from telegram.ext import Application, MessageHandler, ChatMemberHandler, filters
 from config import Config
 from twitter_monitor import TwitterMonitor
 from database import Database
-from utils import utils, async_error_handler
+from utils import utils, async_error_handler, run_in_thread
 
 # 配置日志
 logging.basicConfig(
@@ -296,7 +296,7 @@ class TeleLuXBot:
                                 return
 
                             # 获取推文详情
-                            tweet_info = await asyncio.to_thread(self.twitter_monitor.get_tweet_by_id, tweet_id)
+                            tweet_info = await run_in_thread(self.twitter_monitor.get_tweet_by_id, tweet_id)
 
                             if tweet_info:
                                 # 发送到群组
@@ -1245,7 +1245,7 @@ class TeleLuXBot:
             logger.info(f"🔍 检查 @{username} 的新推文...")
             
             # 获取新推文
-            new_tweets = await asyncio.to_thread(self.twitter_monitor.check_new_tweets, username)
+            new_tweets = await run_in_thread(self.twitter_monitor.check_new_tweets, username)
             
             if new_tweets:
                 logger.info(f"📢 发现 {len(new_tweets)} 条新推文")
