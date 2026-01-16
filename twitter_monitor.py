@@ -56,6 +56,53 @@ class TwitterMonitor:
         except Exception as e:
             logger.error(f"获取用户ID失败: {e}")
             return None
+
+    def _extract_media_info(self, tweet, media_by_key):
+        """从推文对象中提取媒体信息"""
+        media_items = []
+        media_urls = []
+        preview_image_url = None
+
+        attachments = getattr(tweet, 'attachments', None)
+        if not attachments or 'media_keys' not in attachments:
+            return {
+                'has_media': False,
+                'media_urls': [],
+                'preview_image_url': None,
+                'media': []
+            }
+
+        for media_key in attachments.get('media_keys', []) or []:
+            media = media_by_key.get(media_key)
+            if not media:
+                continue
+
+            media_type = getattr(media, 'type', None)
+            url = getattr(media, 'url', None)
+            preview_url = getattr(media, 'preview_image_url', None)
+
+            media_item = {
+                'media_key': media_key,
+                'type': media_type,
+                'url': url,
+                'preview_image_url': preview_url,
+            }
+            media_items.append(media_item)
+
+            if url:
+                media_urls.append(url)
+            elif preview_url:
+                media_urls.append(preview_url)
+
+            if not preview_image_url and preview_url:
+                preview_image_url = preview_url
+
+        return {
+            'has_media': len(media_items) > 0,
+            'media_urls': media_urls,
+            'preview_image_url': preview_image_url,
+            'media': media_items
+        }
     
     def get_latest_tweets(self, username, count=10):
         """获取用户最新的推文"""
@@ -68,12 +115,18 @@ class TwitterMonitor:
 
             # 方法1: 尝试获取所有类型的推文
             try:
+                media_by_key = {}
                 tweets = self.client.get_users_tweets(
                     id=user_id,
                     max_results=count,
-                    tweet_fields=['created_at', 'public_metrics', 'referenced_tweets'],
+                    tweet_fields=['created_at', 'public_metrics', 'referenced_tweets', 'attachments'],
+                    expansions=['attachments.media_keys'],
+                    media_fields=['url', 'type', 'preview_image_url'],
                     # 不排除任何内容，先看看有什么
                 )
+
+                if tweets.includes and 'media' in tweets.includes:
+                    media_by_key = {m.media_key: m for m in tweets.includes['media'] if hasattr(m, 'media_key')}
 
                 if tweets.data:
                     logger.info(f"方法1成功: 获取到 {len(tweets.data)} 条推文")
@@ -105,17 +158,24 @@ class TwitterMonitor:
             except Exception as e:
                 logger.error(f"方法1失败: {e}")
                 tweets_to_process = []
+                media_by_key = {}
 
             # 方法2: 如果方法1失败，尝试只获取原创推文
             if not tweets_to_process:
                 try:
                     logger.info("尝试方法2: 只获取原创推文...")
+                    media_by_key = {}
                     tweets = self.client.get_users_tweets(
                         id=user_id,
                         max_results=count,
-                        tweet_fields=['created_at', 'public_metrics'],
+                        tweet_fields=['created_at', 'public_metrics', 'attachments'],
+                        expansions=['attachments.media_keys'],
+                        media_fields=['url', 'type', 'preview_image_url'],
                         exclude=['retweets', 'replies']
                     )
+
+                    if tweets.includes and 'media' in tweets.includes:
+                        media_by_key = {m.media_key: m for m in tweets.includes['media'] if hasattr(m, 'media_key')}
 
                     if tweets.data:
                         logger.info(f"方法2成功: 获取到 {len(tweets.data)} 条原创推文")
@@ -125,6 +185,7 @@ class TwitterMonitor:
 
                 except Exception as e:
                     logger.error(f"方法2失败: {e}")
+                    media_by_key = {}
 
             # 处理获取到的推文
             if not tweets_to_process:
@@ -133,12 +194,14 @@ class TwitterMonitor:
 
             tweet_list = []
             for tweet in tweets_to_process:
+                media_info = self._extract_media_info(tweet, media_by_key)
                 tweet_info = {
                     'id': tweet.id,
                     'text': tweet.text,
                     'created_at': tweet.created_at,
                     'url': f"https://twitter.com/{username}/status/{tweet.id}",
-                    'username': username
+                    'username': username,
+                    **media_info
                 }
                 tweet_list.append(tweet_info)
 
@@ -164,14 +227,20 @@ class TwitterMonitor:
 
             try:
                 # 使用时间范围获取推文
+                media_by_key = {}
                 tweets = self.client.get_users_tweets(
                     id=user_id,
                     max_results=min(count * 3, 100),  # 获取更多推文以便过滤
-                    tweet_fields=['created_at', 'public_metrics', 'referenced_tweets'],
+                    tweet_fields=['created_at', 'public_metrics', 'referenced_tweets', 'attachments'],
+                    expansions=['attachments.media_keys'],
+                    media_fields=['url', 'type', 'preview_image_url'],
                     start_time=start_time,
                     end_time=end_time,
                     exclude=['retweets', 'replies']  # 只要原创推文
                 )
+
+                if tweets.includes and 'media' in tweets.includes:
+                    media_by_key = {m.media_key: m for m in tweets.includes['media'] if hasattr(m, 'media_key')}
 
                 if tweets.data:
                     logger.info(f"在指定时间范围内获取到 {len(tweets.data)} 条推文")
@@ -186,12 +255,14 @@ class TwitterMonitor:
                     for tweet in recent_tweets:
                         # 确保推文在时间范围内
                         if start_time <= tweet.created_at <= end_time:
+                            media_info = self._extract_media_info(tweet, media_by_key)
                             tweet_info = {
                                 'id': tweet.id,
                                 'text': tweet.text,
                                 'created_at': tweet.created_at,
                                 'url': f"https://twitter.com/{username}/status/{tweet.id}",
-                                'username': username
+                                'username': username,
+                                **media_info
                             }
                             tweet_list.append(tweet_info)
 
@@ -241,9 +312,10 @@ class TwitterMonitor:
             # 获取推文信息
             tweet = self.client.get_tweet(
                 id=tweet_id,
-                tweet_fields=['created_at', 'public_metrics', 'author_id'],
+                tweet_fields=['created_at', 'public_metrics', 'author_id', 'attachments'],
                 user_fields=['username', 'name'],
-                expansions=['author_id']
+                expansions=['author_id', 'attachments.media_keys'],
+                media_fields=['url', 'type', 'preview_image_url']
             )
 
             if not tweet.data:
@@ -266,6 +338,13 @@ class TwitterMonitor:
                 'username': author_username,
                 'author_id': tweet.data.author_id
             }
+
+            media_by_key = {}
+            if tweet.includes and 'media' in tweet.includes:
+                media_by_key = {m.media_key: m for m in tweet.includes['media'] if hasattr(m, 'media_key')}
+
+            media_info = self._extract_media_info(tweet.data, media_by_key)
+            tweet_info.update(media_info)
 
             logger.info(f"成功获取推文: @{author_username} - {tweet.data.text[:50]}...")
             return tweet_info

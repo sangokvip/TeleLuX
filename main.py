@@ -299,11 +299,15 @@ class TeleLuXBot:
 
                             if tweet_info:
                                 # 发送到群组
+                                tweet_text = tweet_info['text']
+                                if tweet_text and len(tweet_text) > 800:
+                                    tweet_text = tweet_text[:800] + "..."
+
                                 tweet_message = f"""
 🐦 <b>推文分享</b>
 
 👤 <b>用户:</b> @{tweet_info['username']}
-📝 <b>内容:</b> {self._escape_html(tweet_info['text'])}
+📝 <b>内容:</b> {self._escape_html(tweet_text)}
 🕒 <b>时间:</b> {tweet_info['created_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}
 """
 
@@ -317,12 +321,24 @@ class TeleLuXBot:
 
                                 tweet_message += f"\n\n🔗 <a href=\"{tweet_info['url']}\">查看原推文</a>".strip()
 
-                                await context.bot.send_message(
-                                    chat_id=self.chat_id,
-                                    text=tweet_message,
-                                    parse_mode='HTML',
-                                    disable_web_page_preview=False
-                                )
+                                preview_url = tweet_info.get('preview_image_url')
+                                if preview_url:
+                                    if len(tweet_message) > 900:
+                                        tweet_message = tweet_message[:900] + "..."
+
+                                    await context.bot.send_photo(
+                                        chat_id=self.chat_id,
+                                        photo=preview_url,
+                                        caption=tweet_message,
+                                        parse_mode='HTML'
+                                    )
+                                else:
+                                    await context.bot.send_message(
+                                        chat_id=self.chat_id,
+                                        text=tweet_message,
+                                        parse_mode='HTML',
+                                        disable_web_page_preview=False
+                                    )
 
                                 # 给私聊用户发送确认消息
                                 await context.bot.send_message(
@@ -1240,23 +1256,39 @@ class TeleLuXBot:
                 
                 for tweet in new_tweets:
                     try:
+                        tweet_text = tweet.get('text', '')
+                        if tweet_text and len(tweet_text) > 800:
+                            tweet_text = tweet_text[:800] + "..."
+
                         # 构建推文消息
                         tweet_message = f"""🐦 <b>@{username} 发布了新推文</b>
 
 📝 <b>内容:</b>
-{utils.escape_html(tweet['text'])}
+{utils.escape_html(tweet_text)}
 
 🕒 <b>时间:</b> {tweet['created_at'].strftime('%Y-%m-%d %H:%M:%S') if hasattr(tweet['created_at'], 'strftime') else tweet['created_at']}
 
 🔗 <a href="{tweet['url']}">查看原推文</a>"""
 
                         # 发送到群组
-                        await self.application.bot.send_message(
-                            chat_id=self.chat_id,
-                            text=tweet_message,
-                            parse_mode='HTML',
-                            disable_web_page_preview=False
-                        )
+                        preview_url = tweet.get('preview_image_url')
+                        if preview_url:
+                            if len(tweet_message) > 900:
+                                tweet_message = tweet_message[:900] + "..."
+
+                            await self.application.bot.send_photo(
+                                chat_id=self.chat_id,
+                                photo=preview_url,
+                                caption=tweet_message,
+                                parse_mode='HTML'
+                            )
+                        else:
+                            await self.application.bot.send_message(
+                                chat_id=self.chat_id,
+                                text=tweet_message,
+                                parse_mode='HTML',
+                                disable_web_page_preview=False
+                            )
                         
                         self.stats['tweets_sent'] += 1
                         self._log_activity('tweet_sent', f"推文ID: {tweet['id']}")
