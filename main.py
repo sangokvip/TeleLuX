@@ -8,7 +8,7 @@ import asyncio
 import logging
 import random
 from datetime import datetime, timedelta
-from telegram import Update
+from telegram import Update, ChatPermissions
 from telegram.ext import Application, MessageHandler, ChatMemberHandler, filters, ContextTypes
 from config import Config
 from twitter_monitor import TwitterMonitor
@@ -699,6 +699,9 @@ class TeleLuXBot:
                 # 自动私信新用户解锁敏感内容说明
                 await self._send_new_user_guide(context, user_id, user_name)
 
+                if self.verification_enabled and new_status == 'member':
+                    await self._send_verification_challenge(context, user_id, user_name)
+
                 # 记录欢迎消息信息
                 if sent_message:
                     welcome_info = {
@@ -1002,6 +1005,18 @@ class TeleLuXBot:
             if message_text.strip() == verification['code']:
                 # 验证成功
                 del self.pending_verifications[str(user_id)]
+
+                # 恢复用户发言权限（恢复为群默认权限）
+                try:
+                    chat = await context.bot.get_chat(self.chat_id)
+                    permissions = chat.permissions or ChatPermissions.all_permissions()
+                    await context.bot.restrict_chat_member(
+                        chat_id=self.chat_id,
+                        user_id=user_id,
+                        permissions=permissions
+                    )
+                except Exception as e:
+                    logger.warning(f"恢复用户发言权限失败: {e}")
                 
                 # 删除验证消息
                 try:
@@ -1044,6 +1059,32 @@ class TeleLuXBot:
             'code': code,
             'expires': datetime.now() + timedelta(seconds=self.verification_timeout)
         }
+
+        try:
+            restricted_permissions = ChatPermissions(
+                can_send_messages=True,
+                can_send_polls=False,
+                can_send_other_messages=False,
+                can_add_web_page_previews=False,
+                can_change_info=False,
+                can_invite_users=False,
+                can_pin_messages=False,
+                can_manage_topics=False,
+                can_send_audios=False,
+                can_send_documents=False,
+                can_send_photos=False,
+                can_send_videos=False,
+                can_send_video_notes=False,
+                can_send_voice_notes=False,
+            )
+            await context.bot.restrict_chat_member(
+                chat_id=self.chat_id,
+                user_id=user_id,
+                permissions=restricted_permissions,
+                until_date=self.pending_verifications[str(user_id)]['expires']
+            )
+        except Exception as e:
+            logger.warning(f"限制新用户发言权限失败: {e}")
         
         verification_message = f"""🔐 <b>入群验证</b>
 
@@ -1590,7 +1631,7 @@ class TeleLuXBot:
 
 <b>女女群：</b>稳定更新，除露老师外还可以看到另外几位女主，露老师与其他女主合作视频等。
 
-<b>三视角群：</b>不定期更新，每次活动拍摄由男友视角随心拍摄。
+<b>第三视角群：</b>不定期更新，每次活动拍摄由男友视角随心拍摄（还没入日常群和女女群的不推荐首次就购买第三视角群）。
 
 <b>定制视频：</b>根据需求定制露老师视频，可SOLO、FM、FF、FFM、FMM，可按要求使用各种玩具和剧情设计。
 
