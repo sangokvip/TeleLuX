@@ -308,7 +308,7 @@ class TeleLuXBot:
 🐦 <b>推文分享</b>
 
 👤 <b>用户:</b> <a href=\"https://x.com/{tweet_info['username']}\">{tweet_info['username']}</a>
-📝 <b>内容:</b> {self._escape_html(tweet_text)}
+📝 <b>内容:</b> {utils.escape_html(tweet_text)}
 🕒 <b>时间:</b> {tweet_info['created_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}
 """
 
@@ -444,7 +444,7 @@ class TeleLuXBot:
                     except:
                         time_str = str(added_at)[:16]
 
-                    message += f"""<b>{i}.</b> {self._escape_html(user_name or '未知用户')}
+                    message += f"""<b>{i}.</b> {utils.escape_html(user_name or '未知用户')}
 • ID: <code>{user_id}</code>
 • 用户名: @{username or '无'}
 • 原因: {reason}
@@ -552,13 +552,13 @@ class TeleLuXBot:
             forward_message = f"""📨 <b>收到私信</b>
 
 👤 <b>用户信息:</b>
-• 姓名: {self._escape_html(user_name)}
+• 姓名: {utils.escape_html(user_name)}
 • 用户名: @{username}
 • 用户ID: {user_id}
 • Chat ID: {chat_id}
 
 📝 <b>消息内容:</b>
-{self._escape_html(message_text)}
+{utils.escape_html(message_text)}
 
 🕒 <b>发送时间:</b> {message_time}
 
@@ -675,7 +675,7 @@ class TeleLuXBot:
                     await self._notify_repeat_user(user_id, 'join', context)
 
                 # 发送欢迎消息
-                welcome_message = f"""🎉 欢迎 <b>{self._escape_html(user_name)}</b> 加入露老师聊天群！
+                welcome_message = f"""🎉 欢迎 <b>{utils.escape_html(user_name)}</b> 加入露老师聊天群！
 
 🔍 认准露老师唯一账号：
 • X账号：<a href="https://x.com/xiuchiluchu910"><b>xiuchiluchu910</b></a>
@@ -800,7 +800,7 @@ class TeleLuXBot:
             notification_message = f"""🚨 <b>用户活动监控</b>
 
 👤 <b>用户信息:</b>
-• 姓名: {self._escape_html(user_name)}
+• 姓名: {utils.escape_html(user_name)}
 • 用户名: @{username}
 • ID: {user_id}
 
@@ -865,7 +865,7 @@ class TeleLuXBot:
             blacklist_message = f"""🚫 <b>用户已自动加入黑名单</b>
 
 👤 <b>用户信息:</b>
-• 姓名: {self._escape_html(user_name)}
+• 姓名: {utils.escape_html(user_name)}
 • 用户名: @{username}
 • ID: {user_id}
 
@@ -985,7 +985,18 @@ class TeleLuXBot:
             
             # 检查是否超时
             if datetime.now() > verification['expires']:
+                verification_message_id = verification.get('message_id')
                 del self.pending_verifications[str(user_id)]
+
+                if verification_message_id:
+                    try:
+                        await context.bot.delete_message(
+                            chat_id=self.chat_id,
+                            message_id=verification_message_id
+                        )
+                    except:
+                        pass
+
                 # 踢出超时用户
                 try:
                     await context.bot.ban_chat_member(
@@ -1004,6 +1015,7 @@ class TeleLuXBot:
             # 检查验证码
             if message_text.strip() == verification['code']:
                 # 验证成功
+                verification_message_id = verification.get('message_id')
                 del self.pending_verifications[str(user_id)]
 
                 # 恢复用户发言权限（恢复为群默认权限）
@@ -1026,6 +1038,15 @@ class TeleLuXBot:
                     )
                 except:
                     pass
+
+                if verification_message_id:
+                    try:
+                        await context.bot.delete_message(
+                            chat_id=self.chat_id,
+                            message_id=verification_message_id
+                        )
+                    except:
+                        pass
                 
                 await context.bot.send_message(
                     chat_id=self.chat_id,
@@ -1101,6 +1122,12 @@ class TeleLuXBot:
             text=verification_message,
             parse_mode='HTML'
         )
+
+        try:
+            if str(user_id) in self.pending_verifications:
+                self.pending_verifications[str(user_id)]['message_id'] = sent.message_id
+        except Exception as e:
+            logger.warning(f"记录验证消息ID失败: {e}")
         
         # 安排超时检查
         if self.application.job_queue:
