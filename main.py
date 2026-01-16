@@ -307,7 +307,7 @@ class TeleLuXBot:
                                 tweet_message = f"""
 🐦 <b>推文分享</b>
 
-👤 <b>用户:</b> @{tweet_info['username']}
+👤 <b>用户:</b> <a href=\"https://x.com/{tweet_info['username']}\">{tweet_info['username']}</a>
 📝 <b>内容:</b> {self._escape_html(tweet_text)}
 🕒 <b>时间:</b> {tweet_info['created_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}
 """
@@ -1257,7 +1257,7 @@ class TeleLuXBot:
                             tweet_text = tweet_text[:800] + "..."
 
                         # 构建推文消息
-                        tweet_message = f"""🐦 <b>@{username} 发布了新推文</b>
+                        tweet_message = f"""🐦 <b><a href=\"https://x.com/{username}\">{username}</a> 发布了新推文</b>
 
 📝 <b>内容:</b>
 {utils.escape_html(tweet_text)}
@@ -1695,34 +1695,7 @@ async def main():
         await bot.start_bot()
         
         # 发送启动通知
-        startup_message = f"""🚀 <b>TeleLuX 完整版已启动！</b>
-
-📊 <b>核心功能:</b>
-• 🐦 <b>Twitter自动监控</b>: @{Config.TWITTER_USERNAME}
-• ⏱️ 检查间隔: {bot.twitter_check_interval} 秒
-• 👋 自动欢迎新用户 (1分钟后删除)
-• 📢 定时业务介绍: 每3小时整点
-• 👥 用户进群退群行为监控
-• 📨 私信消息转发给管理员
-
-💡 <b>私聊命令:</b>
-• <code>27</code> - 发送业务介绍
-• <code>help</code> - 查看帮助
-• 发送 Twitter URL - 分享推文
-
-🔐 <b>管理员命令:</b>
-• <code>stats</code> - 查看统计
-• <code>logs</code> - 查看日志
-• <code>check</code> - 立即检查推文
-• <code>setinterval 秒数</code> - 设置间隔
-
-🎉 <b>系统状态:</b> 运行中"""
-        
-        await bot.application.bot.send_message(
-            chat_id=bot.chat_id,
-            text=startup_message,
-            parse_mode='HTML'
-        )
+        startup_message = None
         
         logger.info(f"🐦 Twitter监控已启动: @{Config.TWITTER_USERNAME}, 间隔: {bot.twitter_check_interval}秒")
         logger.info("💡 私聊机器人发送 'help' 查看所有命令")
