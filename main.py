@@ -40,6 +40,7 @@ class TeleLuXBot:
         self.twitter_check_interval = max(Config.CHECK_INTERVAL, 28800)  # 最小8小时
         self.twitter_api_calls_today = 0  # 今日API调用次数
         self.twitter_api_reset_date = datetime.now().date()  # API计数重置日期
+        self.twitter_auto_forward_enabled = True  # 是否启用自动转发新推文
         # 统计数据
         self.stats = {
             'start_time': datetime.now(),
@@ -295,7 +296,7 @@ class TeleLuXBot:
                                 return
 
                             # 获取推文详情
-                            tweet_info = self.twitter_monitor.get_tweet_by_id(tweet_id)
+                            tweet_info = await asyncio.to_thread(self.twitter_monitor.get_tweet_by_id, tweet_id)
 
                             if tweet_info:
                                 # 发送到群组
@@ -1236,12 +1237,15 @@ class TeleLuXBot:
             if not self.twitter_monitor:
                 logger.warning("Twitter监控未初始化")
                 return
+
+            if not self.twitter_auto_forward_enabled:
+                return
             
             username = Config.TWITTER_USERNAME
             logger.info(f"🔍 检查 @{username} 的新推文...")
             
             # 获取新推文
-            new_tweets = self.twitter_monitor.check_new_tweets(username)
+            new_tweets = await asyncio.to_thread(self.twitter_monitor.check_new_tweets, username)
             
             if new_tweets:
                 logger.info(f"📢 发现 {len(new_tweets)} 条新推文")
@@ -1309,6 +1313,8 @@ class TeleLuXBot:
                 'ads': ('ad_detection_enabled', '广告检测'),
                 'reply': ('auto_reply_enabled', '智能回复'),
                 'autoreply': ('auto_reply_enabled', '智能回复'),
+                'twitter': ('twitter_auto_forward_enabled', '推文自动转发'),
+                'tweets': ('twitter_auto_forward_enabled', '推文自动转发'),
             }
             
             if feature not in feature_map:
@@ -1442,12 +1448,14 @@ class TeleLuXBot:
 🔧 <b>功能开关:</b>
 • <code>toggle verify</code> - 入群验证开关
 • <code>toggle ad</code> - 广告检测开关
-• <code>toggle reply</code> - 智能回复开关"""
+• <code>toggle reply</code> - 智能回复开关
+• <code>toggle twitter</code> - 推文自动转发开关"""
 
             # 功能状态
             verify_status = "✅" if self.verification_enabled else "❌"
             ad_status = "✅" if self.ad_detection_enabled else "❌"
             reply_status = "✅" if self.auto_reply_enabled else "❌"
+            twitter_status = "✅" if self.twitter_auto_forward_enabled else "❌"
             
             help_message += f"""
 
@@ -1460,7 +1468,8 @@ class TeleLuXBot:
 • 检查间隔: {self.twitter_check_interval // 3600} 小时
 • 入群验证: {verify_status}
 • 广告检测: {ad_status}
-• 智能回复: {reply_status}"""
+• 智能回复: {reply_status}
+• 推文自动转发: {twitter_status}"""
 
             await context.bot.send_message(
                 chat_id=chat_id,
@@ -1484,7 +1493,12 @@ class TeleLuXBot:
             
             # 重置上次检查时间以强制检查
             self.last_twitter_check_time = None
-            await self.check_twitter_updates()
+            prev_auto_forward = self.twitter_auto_forward_enabled
+            try:
+                self.twitter_auto_forward_enabled = True
+                await self.check_twitter_updates()
+            finally:
+                self.twitter_auto_forward_enabled = prev_auto_forward
             
             await context.bot.send_message(
                 chat_id=chat_id,

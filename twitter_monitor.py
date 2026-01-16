@@ -22,7 +22,7 @@ class TwitterMonitor:
             # 使用Bearer Token的客户端（推荐用于读取操作）
             self.client = tweepy.Client(
                 bearer_token=Config.TWITTER_BEARER_TOKEN,
-                wait_on_rate_limit=True
+                wait_on_rate_limit=False
             )
 
             # 如果有完整的API密钥，也可以设置API v1.1客户端
@@ -31,13 +31,25 @@ class TwitterMonitor:
                Config.TWITTER_API_KEY != 'your_twitter_api_key_here':
                 auth = tweepy.OAuthHandler(Config.TWITTER_API_KEY, Config.TWITTER_API_SECRET)
                 auth.set_access_token(Config.TWITTER_ACCESS_TOKEN, Config.TWITTER_ACCESS_TOKEN_SECRET)
-                self.api = tweepy.API(auth, wait_on_rate_limit=True)
+                self.api = tweepy.API(auth, wait_on_rate_limit=False)
 
             logger.info("Twitter API初始化成功")
 
         except Exception as e:
             logger.error(f"Twitter API初始化失败: {e}")
             raise
+
+    def _is_rate_limit_error(self, e: Exception) -> bool:
+        try:
+            msg = str(e).lower()
+            return (
+                'rate limit' in msg or
+                'too many requests' in msg or
+                '429' in msg or
+                e.__class__.__name__.lower() in {'toomanyrequests', 'ratelimiterror'}
+            )
+        except Exception:
+            return False
     
     def get_user_id(self, username):
         """根据用户名获取用户ID"""
@@ -54,6 +66,9 @@ class TwitterMonitor:
                 return None
                 
         except Exception as e:
+            if self._is_rate_limit_error(e):
+                logger.warning(f"Twitter API触发速率限制，获取用户ID被跳过: {e}")
+                return None
             logger.error(f"获取用户ID失败: {e}")
             return None
 
@@ -209,6 +224,9 @@ class TwitterMonitor:
             return tweet_list
 
         except Exception as e:
+            if self._is_rate_limit_error(e):
+                logger.warning(f"Twitter API触发速率限制，获取推文被跳过: {e}")
+                return []
             logger.error(f"获取推文失败: {e}")
             return []
 
@@ -301,6 +319,9 @@ class TwitterMonitor:
                     return []
 
         except Exception as e:
+            if self._is_rate_limit_error(e):
+                logger.warning(f"Twitter API触发速率限制，获取指定时间范围推文被跳过: {e}")
+                return []
             logger.error(f"获取指定时间范围推文失败: {e}")
             return []
 
@@ -356,6 +377,9 @@ class TwitterMonitor:
             logger.error(f"无权访问推文: {tweet_id}")
             return None
         except Exception as e:
+            if self._is_rate_limit_error(e):
+                logger.warning(f"Twitter API触发速率限制，获取推文详情被跳过: {e}")
+                return None
             logger.error(f"获取推文详情失败: {e}")
             return None
     
@@ -390,6 +414,9 @@ class TwitterMonitor:
             return new_tweets
             
         except Exception as e:
+            if self._is_rate_limit_error(e):
+                logger.warning(f"Twitter API触发速率限制，本次新推文检查被跳过: {e}")
+                return []
             logger.error(f"检查新推文失败: {e}")
             return []
     
