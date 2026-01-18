@@ -1047,12 +1047,38 @@ class TeleLuXBot:
                         )
                     except:
                         pass
-                
-                await context.bot.send_message(
+
+                success_message = await context.bot.send_message(
                     chat_id=self.chat_id,
                     text=f"✅ <b>{utils.escape_html(update.effective_user.first_name)}</b> 验证成功，欢迎加入！",
                     parse_mode='HTML'
                 )
+
+                try:
+                    if self.application.job_queue:
+                        self.application.job_queue.run_once(
+                            self._delete_temp_message,
+                            when=20,
+                            data={
+                                'chat_id': self.chat_id,
+                                'message_id': success_message.message_id,
+                                'purpose': 'verification_success'
+                            }
+                        )
+                    else:
+                        async def _delete_later():
+                            await asyncio.sleep(20)
+                            try:
+                                await context.bot.delete_message(
+                                    chat_id=self.chat_id,
+                                    message_id=success_message.message_id
+                                )
+                            except Exception as e:
+                                logger.warning(f"删除验证成功消息失败: {e}")
+
+                        asyncio.create_task(_delete_later())
+                except Exception as e:
+                    logger.warning(f"安排删除验证成功消息失败: {e}")
                 self._log_activity('verification_passed', f"用户ID: {user_id}")
                 logger.info(f"✅ 用户 {user_id} 验证成功")
             else:
@@ -1258,6 +1284,21 @@ class TeleLuXBot:
                 msg for msg in self.welcome_messages
                 if msg['message_id'] != message_id
             ]
+
+    async def _delete_temp_message(self, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            job_data = context.job.data
+            chat_id = job_data['chat_id']
+            message_id = job_data['message_id']
+            purpose = job_data.get('purpose', 'temp')
+
+            await context.bot.delete_message(
+                chat_id=chat_id,
+                message_id=message_id
+            )
+            logger.info(f"🗑️ 已删除临时消息 (purpose: {purpose}, 消息ID: {message_id})")
+        except Exception as e:
+            logger.warning(f"删除临时消息失败: {e}")
 
     def _escape_html(self, text):
         """转义HTML特殊字符 - 已弃用，请直接使用utils.escape_html()"""
