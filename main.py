@@ -101,6 +101,44 @@ class TeleLuXBot:
                 # 转发私信给管理员
                 await self._forward_private_message_to_admin(update, context)
 
+                # 处理管理员在私聊中的回复
+                if is_admin_chat and update.message.reply_to_message:
+                    reply_to_message = update.message.reply_to_message
+                    # 检查是否回复的是转发的消息
+                    if reply_to_message.from_user.id == context.bot.id:
+                        # 尝试从原消息中提取用户ID
+                        # 格式: "Chat ID: 123456789"
+                        try:
+                            text_lines = reply_to_message.text.split('\n')
+                            target_chat_id = None
+                            for line in text_lines:
+                                if "Chat ID:" in line:
+                                    target_chat_id = line.split("Chat ID:")[1].strip()
+                                    break
+                            
+                            if target_chat_id:
+                                # 发送回复给用户
+                                await context.bot.send_message(
+                                    chat_id=target_chat_id,
+                                    text=f"📩 <b>管理员回复:</b>\n\n{message_text}",
+                                    parse_mode='HTML'
+                                )
+                                # 确认发送成功
+                                await context.bot.send_message(
+                                    chat_id=chat_id,
+                                    text=f"✅ 已回复用户 {target_chat_id}",
+                                    parse_mode='HTML'
+                                )
+                                logger.info(f"管理员回复用户 {target_chat_id}: {message_text[:50]}...")
+                                return
+                        except Exception as e:
+                            logger.error(f"处理管理员回复失败: {e}")
+                            await context.bot.send_message(
+                                chat_id=chat_id,
+                                text="❌ 回复失败，无法解析目标用户ID",
+                                parse_mode='HTML'
+                            )
+
                 if message_text == "27":
                     special_message = """小助理下单机器人： 👉https://t.me/Lulaoshi_bot
 
