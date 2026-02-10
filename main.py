@@ -66,7 +66,6 @@ class TeleLuXBot:
             '免费领取', '免费赠送', '点击链接', '点击进入',
             '赚钱', '日入', '月入', '日赚', '月赚', '轻松月入',
             '兑换码', '优惠券', '押金', '押金群',
-            't.me/', 'telegram.me/', '@', 'http://', 'https://'
         ]
         self.ad_detection_enabled = True  # 是否启用广告检测
         # 智能回复配置
@@ -86,6 +85,8 @@ class TeleLuXBot:
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理收到的消息"""
         try:
+            if not update.message:
+                return
             message_text = update.message.text.strip() if update.message.text else ""
             chat_type = update.effective_chat.type
             chat_id = update.effective_chat.id
@@ -140,6 +141,14 @@ class TeleLuXBot:
                             )
 
                 if message_text == "27":
+                    if not is_admin_chat:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="❌ 此命令仅管理员可用",
+                            parse_mode='HTML'
+                        )
+                        logger.warning(f"未经授权的业务介绍命令尝试 (来自用户: {user_name}, Chat ID: {chat_id})")
+                        return
                     special_message = """小助理下单机器人： 👉https://t.me/Lulaoshi_bot
 
 ※平台是自助入群，机器人下单即可。
@@ -418,7 +427,7 @@ class TeleLuXBot:
                     # 对其他私聊消息给予提示
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text="👋 你好！\n\n💡 可用功能：\n• 发送 '27' - 向群组发送业务介绍\n• 发送 'clear' - 清除群内所有欢迎消息\n• 发送 'blacklist' - 查看黑名单\n• 发送 'unban 用户ID' - 从黑名单移除用户\n• 发送 Twitter URL - 分享推文到群组\n\n📝 支持的URL格式：\n• https://twitter.com/用户名/status/推文ID\n• https://x.com/用户名/status/推文ID",
+                        text="👋 你好！\n\n💡 可用功能：\n• 发送 'help' - 查看帮助信息\n• 发送 Twitter URL - 分享推文到群组\n\n📝 支持的URL格式：\n• https://twitter.com/用户名/status/推文ID\n• https://x.com/用户名/status/推文ID",
                         parse_mode='HTML'
                     )
                     logger.info(f"收到私聊消息'{message_text}'，已回复提示信息 (来自用户: {user_name})")
@@ -750,22 +759,25 @@ class TeleLuXBot:
                         'timestamp': current_time
                     }
                     self.welcome_messages.append(welcome_info)
+                    # 限制欢迎消息列表大小，防止内存无限增长
+                    if len(self.welcome_messages) > 200:
+                        self.welcome_messages = self.welcome_messages[-100:]
                     logger.info(f"📝 已记录欢迎消息: {user_name} (消息ID: {sent_message.message_id})")
 
-                # 安排1分钟后删除消息（根据用户需求）
+                # 安排5分钟后删除消息
                 if sent_message:
                     try:
                         if context.job_queue:
                             context.job_queue.run_once(
                                 self._delete_welcome_message,
-                                when=60,  # 1分钟 = 60秒
+                                when=300,  # 5分钟 = 300秒
                                 data={
                                     'chat_id': self.chat_id,
                                     'message_id': sent_message.message_id,
                                     'user_name': user_name
                                 }
                             )
-                            logger.info(f"⏰ 已安排1分钟后删除欢迎消息 (消息ID: {sent_message.message_id})")
+                            logger.info(f"⏰ 已安排5分钟后删除欢迎消息 (消息ID: {sent_message.message_id})")
                         else:
                             logger.warning("JobQueue不可用，无法安排自动删除欢迎消息")
                     except Exception as e:
@@ -948,14 +960,17 @@ class TeleLuXBot:
         
         text_lower = text.lower()
         
+        # 排除白名单（群主相关链接）
+        whitelist = ['t.me/lulaoshi_bot', 't.me/mteacherlu', '@mteacherlu', 'x.com/xiuchiluchu910',
+                     'twitter.com/xiuchiluchu910', 'blog.sinovale.com']
+        is_whitelisted = any(w in text_lower for w in whitelist)
+        if is_whitelisted:
+            return False, ""
+        
         # 检查广告关键词
         for keyword in self.ad_keywords:
             if keyword.lower() in text_lower:
-                # 排除白名单（群主相关链接）
-                whitelist = ['t.me/lulaoshi_bot', 't.me/mteacherlu', '@mteacherlu', 'x.com/xiuchiluchu910']
-                is_whitelisted = any(w in text_lower for w in whitelist)
-                if not is_whitelisted:
-                    return True, keyword
+                return True, keyword
         
         return False, ""
 
@@ -1000,7 +1015,7 @@ class TeleLuXBot:
 🆔 <b>用户ID:</b> <code>{user_id}</code>
 🔍 <b>触发词:</b> {utils.escape_html(matched_keyword)}
 📝 <b>消息内容:</b>
-{utils.escape_html(update.message.text[:200])}...
+{utils.escape_html((update.message.text or '')[:200])}
 
 ✅ 消息已自动删除"""
                 
@@ -1135,9 +1150,15 @@ class TeleLuXBot:
     async def _send_verification_challenge(self, context: ContextTypes.DEFAULT_TYPE, 
                                             user_id: int, user_name: str):
         """发送入群验证挑战"""
-        # 生成简单的数学验证码
-        a, b = random.randint(1, 10), random.randint(1, 10)
-        code = str(a + b)
+        # 生成数学验证码（加法或减法，确保结果为正数）
+        a = random.randint(10, 50)
+        b = random.randint(1, 9)
+        if random.choice([True, False]):
+            code = str(a + b)
+            op = '+'
+        else:
+            code = str(a - b)
+            op = '-'
         
         # 记录待验证信息
         self.pending_verifications[str(user_id)] = {
@@ -1177,7 +1198,7 @@ class TeleLuXBot:
 
 请在 {self.verification_timeout // 60} 分钟内回答以下问题完成验证：
 
-❓ <b>{a} + {b} = ?</b>
+❓ <b>{a} {op} {b} = ?</b>
 
 ⚠️ 超时未验证将被自动移出群组"""
 
@@ -1363,9 +1384,9 @@ class TeleLuXBot:
             'details': details
         }
         self.activity_logs.append(log_entry)
-        # 只保留最近100条日志
-        if len(self.activity_logs) > 100:
-            self.activity_logs = self.activity_logs[-100:]
+        # 只保留最近200条日志
+        if len(self.activity_logs) > 200:
+            self.activity_logs = self.activity_logs[-200:]
 
     async def check_twitter_updates(self):
         """检查Twitter新推文并自动发送到群组"""
@@ -1663,10 +1684,10 @@ class TeleLuXBot:
         """设置Twitter检查间隔"""
         try:
             interval = int(interval_str)
-            if interval < 60:
+            if interval < 3600:
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text="❌ 检查间隔不能小于60秒",
+                    text="❌ 检查间隔不能小于3600秒(1小时)，免费API建议至少8小时(28800秒)",
                     parse_mode='HTML'
                 )
                 return
@@ -1705,11 +1726,15 @@ class TeleLuXBot:
         try:
             now = datetime.now()
 
-            # 检查是否到了整点时间（每3小时：0, 3, 6, 9, 12, 15, 18, 21点）
-            if now.hour % 3 == 0 and now.minute == 0:
-                # 避免重复发送（在同一分钟内）
-                if (self.last_business_intro_time and
-                    (now - self.last_business_intro_time).total_seconds() < 60):
+            # 每3小时发送一次业务介绍（基于间隔判断，避免漏发）
+            if self.last_business_intro_time:
+                elapsed = (now - self.last_business_intro_time).total_seconds()
+                if elapsed < 10800:  # 3小时 = 10800秒
+                    return
+            else:
+                # 首次运行时，检查是否在整点附近（避免启动时立即发送）
+                if now.hour % 3 != 0:
+                    self.last_business_intro_time = now
                     return
 
                 business_intro_message = """🌟 <b>露老师门槛群介绍</b> 🌟

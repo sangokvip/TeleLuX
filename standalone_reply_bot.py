@@ -233,19 +233,9 @@ class StandaloneReplyBot:
             await update.message.reply_text(f"❌ 发送回复失败: {str(e)[:100]}")
 
     def _escape_html(self, text):
-        """转义HTML特殊字符"""
-        if not text:
-            return ""
-        
-        html_escape_table = {
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            '"': "&quot;",
-            "'": "&#x27;",
-        }
-        
-        return "".join(html_escape_table.get(c, c) for c in text)
+        """转义HTML特殊字符 - 使用utils模块"""
+        from utils import utils
+        return utils.escape_html(text)
 
     async def start_bot(self):
         """启动机器人"""
