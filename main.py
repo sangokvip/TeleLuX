@@ -424,13 +424,44 @@ class TeleLuXBot:
                         )
 
                 else:
-                    # 对其他私聊消息给予提示
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        text="👋 你好！\n\n💡 可用功能：\n• 发送 'help' - 查看帮助信息\n• 发送 Twitter URL - 分享推文到群组\n\n📝 支持的URL格式：\n• https://twitter.com/用户名/status/推文ID\n• https://x.com/用户名/status/推文ID",
-                        parse_mode='HTML'
-                    )
-                    logger.info(f"收到私聊消息'{message_text}'，已回复提示信息 (来自用户: {user_name})")
+                    # 先检查是否匹配自动回复关键词（与群内回复一致）
+                    replied = False
+                    if self.auto_reply_enabled and message_text:
+                        for keyword, reply in self.auto_replies.items():
+                            if keyword in message_text:
+                                await context.bot.send_message(
+                                    chat_id=chat_id,
+                                    text=reply,
+                                    parse_mode='HTML'
+                                )
+                                logger.info(f"私聊自动回复触发: '{keyword}' (来自用户: {user_name})")
+                                replied = True
+                                break
+                    
+                    if not replied:
+                        # 转发未匹配的私聊消息给管理员
+                        if self.admin_chat_id:
+                            forward_msg = f"""📩 <b>收到私聊消息</b>
+
+👤 <b>用户:</b> {utils.escape_html(user_name)}
+🆔 <b>ID:</b> <code>{update.effective_user.id}</code>
+📝 <b>内容:</b>
+{utils.escape_html(message_text)}"""
+                            try:
+                                await context.bot.send_message(
+                                    chat_id=self.admin_chat_id,
+                                    text=forward_msg,
+                                    parse_mode='HTML'
+                                )
+                            except Exception as e:
+                                logger.error(f"转发私聊消息给管理员失败: {e}")
+                        
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="👋 你好！你的消息已收到，我们会尽快回复。\n\n💡 常用指令：\n• 发送「进群」了解如何加入\n• 发送「价格」了解价格信息",
+                            parse_mode='HTML'
+                        )
+                        logger.info(f"收到私聊消息'{message_text}'，已回复提示并转发给管理员 (来自用户: {user_name})")
             # 处理群组消息
             elif str(chat_id) == str(self.chat_id):
                 user_id = update.effective_user.id
