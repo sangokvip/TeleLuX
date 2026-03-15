@@ -48,3 +48,17 @@
   - 移除了字典里的硬链接，保持内容与表示层的分离。
   - 已检查 python-telegram-bot 发送方法的签名，添加 `reply_markup` 参数不会影响既有功能。
 - **回滚点**: `git diff HEAD -- main.py` 可查看变更，`git checkout HEAD -- main.py` 可回滚
+
+### 5) Refactor: 替换失效的 Twitter(X) Free API 为 RapidAPI
+- **变更文件**: `config.py`、`twitter_monitor.py`、`main.py`、`requirements.txt`
+- **背景与目标**: Twitter 收回了官方原有的 Free API 数据读取权限（引发 403 错误），为保全自动推送推文功能，迁移至 RapidAPI 上的非官方接口引擎 (Twtttr API)。
+- **技术实施**:
+  - 更新配置：在 `config.py` 及校验逻辑中加入并置顶 `RAPIDAPI_KEY`，弃用原有的 tweepy 配置参数验证。
+  - 更换依赖库：添加 `aiohttp` 以支持非阻塞的并发网络请求，移除官方封闭的 `tweepy`。
+  - 重构监控类：`TwitterMonitor` 完成底层重写，内部请求使用 `_make_request(url, headers)` 进行。
+  - 定制解析：由于新接口使用了逆向内网接口返回庞杂的 GraphQL 层级 JSON，重新实现了 `get_latest_tweets` 利用 `TimelineAddEntries` 定位推文。
+  - 同步转异步适配：对 `TeleLuxBot (main.py)` 中此前对推文类的调用改为 `await` 异步访问，防止阻塞主 loop。
+- **风险自查**:
+  - 移除原先的 tweepy 相关配置报错将不再打断启动。
+  - 使用了 try-catch 全面包裹 HTTP 访问请求，避免网络断层拖垮 bot 本体。
+- **回滚点**: `git stash / git checkout .` 撤销本次代码结构更改。

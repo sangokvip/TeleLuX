@@ -73,7 +73,10 @@ class Config:
         
         return value.lower() in ('true', '1', 'yes', 'on', 'enabled')
     
-    # Twitter API 配置
+    # Twitter (X) RapidAPI 配置
+    RAPIDAPI_KEY = None
+    
+    # 兼容老的官方 Twitter 配置 (已废弃/非必填)
     TWITTER_BEARER_TOKEN = None
     TWITTER_API_KEY = None
     TWITTER_API_SECRET = None
@@ -95,8 +98,9 @@ class Config:
     @classmethod
     def _init_configs(cls):
         """初始化配置（在类加载后调用）"""
-        # Twitter API 配置
-        cls.TWITTER_BEARER_TOKEN = cls.get_config('TWITTER_BEARER_TOKEN', required=True)
+        # Twitter (X) API 配置
+        cls.RAPIDAPI_KEY = cls.get_config('RAPIDAPI_KEY')
+        cls.TWITTER_BEARER_TOKEN = cls.get_config('TWITTER_BEARER_TOKEN')
         cls.TWITTER_API_KEY = cls.get_config('TWITTER_API_KEY')
         cls.TWITTER_API_SECRET = cls.get_config('TWITTER_API_SECRET')
         cls.TWITTER_ACCESS_TOKEN = cls.get_config('TWITTER_ACCESS_TOKEN')
@@ -155,7 +159,7 @@ class Config:
         cls._init_configs()
         
         required_configs = [
-            'TWITTER_BEARER_TOKEN',
+            'RAPIDAPI_KEY',
             'TELEGRAM_BOT_TOKEN', 
             'TELEGRAM_CHAT_ID',
             'TWITTER_USERNAME'

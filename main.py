@@ -1450,8 +1450,8 @@ class TeleLuXBot:
             username = Config.TWITTER_USERNAME
             logger.info(f"🔍 检查 @{username} 的新推文...")
             
-            # 获取新推文
-            new_tweets = await run_in_thread(self.twitter_monitor.check_new_tweets, username)
+            # 获取新推文 (现在是异步方法)
+            new_tweets = await self.twitter_monitor.check_new_tweets(username)
             
             if new_tweets:
                 logger.info(f"📢 发现 {len(new_tweets)} 条新推文")
