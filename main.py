@@ -436,7 +436,7 @@ class TeleLuXBot:
                     if self.auto_reply_enabled and message_text:
                         for keyword, reply in self.auto_replies.items():
                             if keyword in message_text:
-                                keyboard = [[InlineKeyboardButton("👉 点击这里直接与下单机器人了解价格", url="https://t.me/Lulaoshi_bot")]]
+                                keyboard = [[InlineKeyboardButton("👉 点击这里购买/了解价格", url="https://t.me/Lulaoshi_bot")]]
                                 reply_markup = InlineKeyboardMarkup(keyboard)
                                 await context.bot.send_message(
                                     chat_id=chat_id,
@@ -492,7 +492,7 @@ class TeleLuXBot:
                 if self.auto_reply_enabled:
                     reply = self._get_auto_reply(message_text)
                     if reply:
-                        keyboard = [[InlineKeyboardButton("👉 点击这里直接与下单机器人了解价格", url="https://t.me/Lulaoshi_bot")]]
+                        keyboard = [[InlineKeyboardButton("👉 点击这里购买/了解价格", url="https://t.me/Lulaoshi_bot")]]
                         reply_markup = InlineKeyboardMarkup(keyboard)
                         await context.bot.send_message(
                             chat_id=chat_id,
