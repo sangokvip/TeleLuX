@@ -70,15 +70,15 @@ class TeleLuXBot:
         self.ad_detection_enabled = True  # 是否启用广告检测
         # 智能回复配置
         self.auto_replies = {
-            '价格': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
-            '多少钱': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
-            '怎么加入': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
-            '如何加入': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
-            '怎么进群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
-            '求进群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
-            '进群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
-            '入群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
-            '怎么入群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
+            '价格': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！',
+            '多少钱': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！',
+            '怎么加入': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！',
+            '如何加入': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！',
+            '怎么进群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！',
+            '求进群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！',
+            '进群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！',
+            '入群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！',
+            '怎么入群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！',
         }
         self.auto_reply_enabled = True  # 是否启用智能回复
         
@@ -436,10 +436,13 @@ class TeleLuXBot:
                     if self.auto_reply_enabled and message_text:
                         for keyword, reply in self.auto_replies.items():
                             if keyword in message_text:
+                                keyboard = [[InlineKeyboardButton("👉 点击这里直接与下单机器人了解价格", url="https://t.me/Lulaoshi_bot")]]
+                                reply_markup = InlineKeyboardMarkup(keyboard)
                                 await context.bot.send_message(
                                     chat_id=chat_id,
                                     text=reply,
-                                    parse_mode='HTML'
+                                    parse_mode='HTML',
+                                    reply_markup=reply_markup
                                 )
                                 logger.info(f"私聊自动回复触发: '{keyword}' (来自用户: {user_name})")
                                 replied = True
@@ -489,11 +492,14 @@ class TeleLuXBot:
                 if self.auto_reply_enabled:
                     reply = self._get_auto_reply(message_text)
                     if reply:
+                        keyboard = [[InlineKeyboardButton("👉 点击这里直接与下单机器人了解价格", url="https://t.me/Lulaoshi_bot")]]
+                        reply_markup = InlineKeyboardMarkup(keyboard)
                         await context.bot.send_message(
                             chat_id=chat_id,
                             text=reply,
                             parse_mode='HTML',
-                            reply_to_message_id=update.message.message_id
+                            reply_to_message_id=update.message.message_id,
+                            reply_markup=reply_markup
                         )
                         self._log_activity('auto_reply', f"触发词: {message_text[:20]}")
                         return

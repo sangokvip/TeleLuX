@@ -23,7 +23,7 @@
   - 保持了上方的欢迎语、账号认证和防骗提示不变
 - **风险自查**:
   - 仅修改了字符串模板内容，不影响消息发送逻辑
-  - 移除了包含外部链接的 HTML 标签，减少了可能被判定为广告的风险
+  - 移细了包含外部链接的 HTML 标签，减少了可能被判定为广告的风险
 - **回滚点**: `git diff HEAD -- main.py` 可查看变更，`git checkout HEAD -- main.py` 可回滚
 
 ### 3) Feature: 提升群用户转化机制（内联按钮与引导话术）
@@ -35,4 +35,16 @@
 - **风险自查**:
   - 导入新模块没有覆盖原有的任何模块。
   - 创建 InlineKeyboardButton 时确保遵循了 `python-telegram-bot` API 的基本语法，传递了正确的 `url` 参数和 `reply_markup` 参数给 `send_message`。
+- **回滚点**: `git diff HEAD -- main.py` 可查看变更，`git checkout HEAD -- main.py` 可回滚
+
+### 4) Feature: 自动回复增加内联大按钮跳转
+- **变更文件**: `main.py`
+- **背景与目标**: 用户在测试后，要求对触发关键词的自动回复也采用内联大按钮跳转的方式，以进一步优化引导转化。
+- **技术实施**:
+  - 更新了 `self.auto_replies` 字典中的文本，删除了硬编码的下订单链接（URL），仅保留引导语。
+  - 在处理私聊自动回复（约 435 行）以及处理群聊自动回复（约 487 行）的地方，生成了统一的 `InlineKeyboardMarkup` 包含按钮 `👉 点击这里直接与下单机器人了解价格` 并指向 `https://t.me/Lulaoshi_bot`。
+  - 将 `reply_markup=reply_markup` 显式传递给了对应的 `context.bot.send_message` 函数。
+- **风险自查**:
+  - 移除了字典里的硬链接，保持内容与表示层的分离。
+  - 已检查 python-telegram-bot 发送方法的签名，添加 `reply_markup` 参数不会影响既有功能。
 - **回滚点**: `git diff HEAD -- main.py` 可查看变更，`git checkout HEAD -- main.py` 可回滚
