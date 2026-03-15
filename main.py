@@ -349,8 +349,13 @@ class TeleLuXBot:
                                 )
                                 return
 
+                            # 尝试提取用户名以帮助准确检索推文
+                            import re
+                            username_match = re.search(r'twitter\.com/([^/]+)/status', message_text) or re.search(r'x\.com/([^/]+)/status', message_text)
+                            username = username_match.group(1) if username_match else None
+                            
                             # 获取推文详情
-                            tweet_info = await run_in_thread(self.twitter_monitor.get_tweet_by_id, tweet_id)
+                            tweet_info = await self.twitter_monitor.get_tweet_by_id(tweet_id, username=username)
 
                             if tweet_info:
                                 # 发送到群组

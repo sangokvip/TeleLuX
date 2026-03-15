@@ -62,3 +62,14 @@
   - 移除原先的 tweepy 相关配置报错将不再打断启动。
   - 使用了 try-catch 全面包裹 HTTP 访问请求，避免网络断层拖垮 bot 本体。
 - **回滚点**: `git stash / git checkout .` 撤销本次代码结构更改。
+
+### 3) Fix: 修复推文直链解析的异步错误
+- **变更文件**: `main.py`, `twitter_monitor.py`
+- **背景与目标**: 将 `get_tweet_by_id` 等方法改为异步后，主流程中调用仍用了已废弃的同步线程包装导致返回 coroutine 错误，且新的 API 不支持直接按 ID 查推，需要用户名做前缀扫描。
+- **技术实施**:
+  - 移除 `run_in_thread(get_tweet_by_id...)` 改为直接 `await self.twitter_monitor.get_tweet_by_id`。
+  - 在 `main.py` 处理特定 URL 的逻辑里，增加提取 URL 里面的 `username` 并传给后台检索。
+  - 在 `twitter_monitor.py` 中的 `get_tweet_by_id` 实现近期推文循环比对的功能，通过传入的 `username` 先拉列表再做特征命中。
+- **风险自查**:
+  - 仅限于处理单个推文详情链接回复，不影响自动监控循环。
+- **回滚点**: 

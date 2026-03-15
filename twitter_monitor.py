@@ -225,10 +225,30 @@ class TwitterMonitor:
                 
         return recent_tweets[:count]
 
-    async def get_tweet_by_id(self, tweet_id):
-        """根据推文ID获取推文详情 (twitter241 目前可能不支持此端点，暂缓实现)"""
-        logger.error(f"twitter241.p.rapidapi.com 暂未实现通过 ID 独立获取推文的功能")
-        return None
+    async def get_tweet_by_id(self, tweet_id, username=None):
+        """根据推文ID获取推文详情 (twitter241 暂无直接ID接口，采用近期推文列表暴力检索)"""
+        try:
+            logger.info(f"尝试通过近期推文检索推文详情: {tweet_id}")
+            # 如果没有显式传 username，就用全局配置的那个
+            target_user = username or Config.TWITTER_USERNAME
+            if not target_user:
+                logger.error("无法检索单挑推文：未知 username")
+                return None
+                
+            # 拉取多一点比如近期40条推文寻找
+            recent_tweets = await self.get_latest_tweets(target_user, count=40)
+            
+            for tweet in recent_tweets:
+                if str(tweet.get("id")) == str(tweet_id):
+                    logger.info(f"在近期推文中成功找到了目标推文 {tweet_id}")
+                    return tweet
+                    
+            logger.error(f"在近期推文中未找到推文 {tweet_id}，可能是较老的推文或不同用户的推文")
+            return None
+
+        except Exception as e:
+            logger.error(f"获取推文详情失败: {e}")
+            return None
     
     async def check_new_tweets(self, username):
         """检查新推文"""
