@@ -35,7 +35,7 @@ class TwitterMonitor:
 
     async def _make_request(self, endpoint: str, params: dict = None) -> dict:
         """封装 aiohttp 请求"""
-        self.base_url = "https://twitter241.p.rapidapi.com"
+        url = f"https://twitter241.p.rapidapi.com{endpoint}"
         
         # 因为在常规循环里调用可能是同步结构，虽然是 async 方法
         # 实际调用的主类如果不在协程里，需要用 asyncio.run，

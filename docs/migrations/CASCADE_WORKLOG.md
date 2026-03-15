@@ -73,3 +73,13 @@
 - **风险自查**:
   - 仅限于处理单个推文详情链接回复，不影响自动监控循环。
 - **回滚点**: 
+
+### 4) Fix: 修复抓取日志网络请求属性及 admin_chat_id 抛错
+- **变更文件**: `twitter_monitor.py`, `main.py`
+- **背景与目标**: 用户反馈线上版本抛出 `name 'url' is not defined` 以及 `TeleLuXBot object has no attribute admin_chat_id`。前者是因为替换新 API 发包类重组时不慎漏写了组装 url 变量的逻辑；后者是 Bot 实例在 `__init__` 漏写了属性绑定。
+- **技术实施**:
+  - 恢复 `_make_request` 中的 `url = f'https://twitter241...{endpoint}'`。
+  - 在 `TeleLuXBot.__init__` 补充 `self.admin_chat_id = Config.ADMIN_CHAT_ID`。
+- **风险自查**:
+  - 仅修补运行时上下文漏洞。
+- **回滚点**: 

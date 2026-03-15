@@ -29,6 +29,7 @@ class TeleLuXBot:
     def __init__(self):
         self.bot_token = Config.TELEGRAM_BOT_TOKEN
         self.chat_id = Config.TELEGRAM_CHAT_ID
+        self.admin_chat_id = Config.ADMIN_CHAT_ID
         self.application = None
         self.twitter_monitor = None
         self.database = None
