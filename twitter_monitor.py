@@ -8,13 +8,13 @@ from database import Database
 logger = logging.getLogger(__name__)
 
 class TwitterMonitor:
-    """Twitter监控类 (基于 RapidAPI Twtttr)"""
+    """Twitter监控类 (基于 RapidAPI twitter241)"""
     
     def __init__(self):
         self.config = Config()
         self.database = Database()
         self.headers = None
-        self.base_url = "https://twtttr.p.rapidapi.com"
+        self.base_url = "https://twitter241.p.rapidapi.com"
         self._setup_twitter_api()
     
     def _setup_twitter_api(self):
@@ -127,17 +127,22 @@ class TwitterMonitor:
 
             logger.info(f"开始获取用户 {username} (ID: {user_id}) 的推文...")
             
-            # 使用 RapidAPI 获取用户推文
-            data = await self._make_request("/user-tweets", {"user": user_id, "count": 20})
-            if not data or not data.get("result"):
-                logger.warning("未能获取推文数组")
+            # 为 twitter241 的 /user-tweets 准备参数（测试发现参数叫 user 而非 user_id）
+            params = {
+                "user": user_id,
+                "count": count
+            }
+            
+            data = await self._make_request("/user-tweets", params)
+            if not data:
                 return []
+
+            # 解析推文 (twitter241 的 /user-tweets 结构为 result.timeline.instructions)
+            instructions = data.get("result", {}).get("timeline", {}).get("instructions", [])
             
             tweet_list = []
             
             try:
-                # twitter241 返回的结构是 {"result": {"timeline": {"instructions": [...]}}}
-                instructions = data["result"]["timeline"]["instructions"]
                 entries = []
                 for inst in instructions:
                     if inst.get("type") == "TimelineAddEntries":
