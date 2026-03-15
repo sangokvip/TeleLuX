@@ -759,13 +759,7 @@ class TeleLuXBot:
 • X账号：<a href="https://x.com/xiuchiluchu910"><b>xiuchiluchu910</b></a>
 • Telegram账号：<a href="https://t.me/mteacherlu"><b>@mteacherlu</b></a>
 
-💬 群内随意聊天，但请勿轻易相信任何陌生人，谨防诈骗 ⚠️
-
-📌 <b>重要提示：</b>如果您进群后不显示内容，请尝试以下解决办法：
-1. Google搜索相关问题，例如在 <a href="https://www.google.com">Google</a> 中搜索：<b>telegram进群后不显示内容</b>
-2. 参考解决方案网页：<a href="https://blog.sinovale.com/2912.html">https://blog.sinovale.com/2912.html</a>
-3. 重启Telegram应用或清除缓存
-4. 检查网络连接是否稳定"""
+💬 群内随意聊天，但请勿轻易相信任何陌生人，谨防诈骗 ⚠️"""
 
                 sent_message = await context.bot.send_message(
                     chat_id=self.chat_id,
