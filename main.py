@@ -8,7 +8,7 @@ import asyncio
 import logging
 import random
 from datetime import datetime, timedelta
-from telegram import Update, ChatPermissions
+from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, ChatMemberHandler, filters, ContextTypes
 from config import Config
 from twitter_monitor import TwitterMonitor
@@ -70,15 +70,15 @@ class TeleLuXBot:
         self.ad_detection_enabled = True  # 是否启用广告检测
         # 智能回复配置
         self.auto_replies = {
-            '价格': '💰 关于价格请私信露老师 @mteacherlu 或使用机器人 https://t.me/Lulaoshi_bot',
-            '多少钱': '💰 关于价格请私信露老师 @mteacherlu 或使用机器人 https://t.me/Lulaoshi_bot',
-            '怎么加入': '👉 请使用机器人下单 https://t.me/Lulaoshi_bot',
-            '如何加入': '👉 请使用机器人下单 https://t.me/Lulaoshi_bot',
-            '怎么进群': '👉 请使用机器人下单 https://t.me/Lulaoshi_bot',
-            '求进群': '👉 请使用机器人下单 https://t.me/Lulaoshi_bot',
-            '进群': '👉 请使用机器人下单 https://t.me/Lulaoshi_bot',
-            '入群': '👉 请使用机器人下单 https://t.me/Lulaoshi_bot',
-            '怎么入群': '👉 请使用机器人下单 https://t.me/Lulaoshi_bot',
+            '价格': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
+            '多少钱': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
+            '怎么加入': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
+            '如何加入': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
+            '怎么进群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
+            '求进群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
+            '进群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
+            '入群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
+            '怎么入群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！\n👉 请点击这里直接和下单机器人了解价格：https://t.me/Lulaoshi_bot',
         }
         self.auto_reply_enabled = True  # 是否启用智能回复
         
@@ -168,11 +168,11 @@ class TeleLuXBot:
 
 相关群组与定制介绍：
 
-日常群：稳定更新，露老师个人原创作品，会更新长视频以及多量照片，都是推特所看不到的内容。
+视频课堂群：稳定更新，露老师个人原创作品，会更新长视频以及多量照片，都是推特所看不到的内容。
 
 女女群：稳定更新，除露老师外还可以看到另外几位女主，露老师与其他女主合作视频等。
 
-第三视角群：不定期更新，每次活动拍摄由男友视角随心拍摄（还没入日常群和女女群的不推荐首次就购买第三视角群）。
+第三视角群：不定期更新，每次活动拍摄由男友视角随心拍摄（还没入视频课堂群和女女群的不推荐首次就购买第三视角群）。
 
 定制视频：根据需求定制露老师视频，可SOLO、FM、FF、FFM、FMM，可按要求使用各种玩具和剧情设计。
 
@@ -189,12 +189,19 @@ class TeleLuXBot:
                         except Exception as e:
                             logger.warning(f"删除上一次业务介绍消息失败: {e}")
 
+                    # 创建内联键盘
+                    keyboard = [
+                        [InlineKeyboardButton("👉 点击这里购买/了解价格", url="https://t.me/Lulaoshi_bot")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+
                     # 发送到配置的群组
                     sent_message = await context.bot.send_message(
                         chat_id=self.chat_id,
                         text=special_message,
                         parse_mode='HTML',
-                        disable_web_page_preview=True
+                        disable_web_page_preview=True,
+                        reply_markup=reply_markup
                     )
 
                     # 保存新消息的ID
@@ -1807,12 +1814,19 @@ class TeleLuXBot:
                 except Exception as e:
                     logger.warning(f"删除上一次业务介绍消息失败: {e}")
 
+            # 创建内联键盘
+            keyboard = [
+                [InlineKeyboardButton("👉 点击这里购买/了解价格", url="https://t.me/Lulaoshi_bot")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
             # 发送新的业务介绍消息
             sent_message = await self.application.bot.send_message(
                 chat_id=self.chat_id,
                 text=business_intro_message,
                 parse_mode='HTML',
-                disable_web_page_preview=True
+                disable_web_page_preview=True,
+                reply_markup=reply_markup
             )
 
             # 保存新消息的ID
