@@ -1753,22 +1753,23 @@ class TeleLuXBot:
             self.stats['errors'] += 1
 
     async def check_business_intro_schedule(self):
-        """检查是否需要发送定时业务介绍"""
+        """检查是否需要发送定时业务介绍（每8小时一次）"""
         try:
             now = datetime.now()
 
-            # 每3小时发送一次业务介绍（基于间隔判断，避免漏发）
+            # 每8小时发送一次业务介绍
             if self.last_business_intro_time:
                 elapsed = (now - self.last_business_intro_time).total_seconds()
-                if elapsed < 10800:  # 3小时 = 10800秒
+                if elapsed < 28800:  # 8小时 = 28800秒
                     return
             else:
-                # 首次运行时，检查是否在整点附近（避免启动时立即发送）
-                if now.hour % 3 != 0:
-                    self.last_business_intro_time = now
-                    return
+                # 首次运行，记录时间但不立即发送，等待8小时后首次发送
+                self.last_business_intro_time = now
+                logger.info("📢 业务介绍定时已初始化，将在8小时后首次发送")
+                return
 
-                business_intro_message = """🌟 <b>露老师门槛群介绍</b> 🌟
+            # 到达发送时间，构建并发送业务介绍消息
+            business_intro_message = """🌟 <b>露老师门槛群介绍</b> 🌟
 
 小助理下单机器人： 👉https://t.me/Lulaoshi_bot
 
@@ -1801,32 +1802,32 @@ class TeleLuXBot:
 
 ※希望得到更详细介绍询问请私信"""
 
-                # 删除上一次的业务介绍消息
-                if self.last_business_intro_message_id:
-                    try:
-                        await self.application.bot.delete_message(
-                            chat_id=self.chat_id,
-                            message_id=self.last_business_intro_message_id
-                        )
-                        logger.info(f"🗑️ 已删除上一次的业务介绍消息 (消息ID: {self.last_business_intro_message_id})")
-                    except Exception as e:
-                        logger.warning(f"删除上一次业务介绍消息失败: {e}")
+            # 删除上一次的业务介绍消息
+            if self.last_business_intro_message_id:
+                try:
+                    await self.application.bot.delete_message(
+                        chat_id=self.chat_id,
+                        message_id=self.last_business_intro_message_id
+                    )
+                    logger.info(f"🗑️ 已删除上一次的业务介绍消息 (消息ID: {self.last_business_intro_message_id})")
+                except Exception as e:
+                    logger.warning(f"删除上一次业务介绍消息失败: {e}")
 
-                # 发送新的业务介绍消息
-                sent_message = await self.application.bot.send_message(
-                    chat_id=self.chat_id,
-                    text=business_intro_message,
-                    parse_mode='HTML',
-                    disable_web_page_preview=True
-                )
+            # 发送新的业务介绍消息
+            sent_message = await self.application.bot.send_message(
+                chat_id=self.chat_id,
+                text=business_intro_message,
+                parse_mode='HTML',
+                disable_web_page_preview=True
+            )
 
-                # 保存新消息的ID
-                if sent_message:
-                    self.last_business_intro_message_id = sent_message.message_id
-                    logger.info(f"💾 已保存新业务介绍消息ID: {sent_message.message_id}")
+            # 保存新消息的ID
+            if sent_message:
+                self.last_business_intro_message_id = sent_message.message_id
+                logger.info(f"💾 已保存新业务介绍消息ID: {sent_message.message_id}")
 
-                self.last_business_intro_time = now
-                logger.info(f"📢 定时发送业务介绍 (时间: {now.strftime('%H:%M')})")
+            self.last_business_intro_time = now
+            logger.info(f"📢 定时发送业务介绍 (时间: {now.strftime('%H:%M')})")
 
         except Exception as e:
             logger.error(f"定时业务介绍发送失败: {e}")
