@@ -231,28 +231,50 @@ class TwitterMonitor:
         return recent_tweets[:count]
 
     async def get_tweet_by_id(self, tweet_id, username=None):
-        """根据推文ID获取推文详情 (twitter241 暂无直接ID接口，采用近期推文列表暴力检索)"""
+        """根据推文ID获取推文详情 (使用免费的高可用 api.vxtwitter.com 解决直接获取单推文难题)"""
         try:
-            logger.info(f"尝试通过近期推文检索推文详情: {tweet_id}")
-            # 如果没有显式传 username，就用全局配置的那个
-            target_user = username or Config.TWITTER_USERNAME
-            if not target_user:
-                logger.error("无法检索单挑推文：未知 username")
-                return None
-                
-            # 拉取多一点比如近期40条推文寻找
-            recent_tweets = await self.get_latest_tweets(target_user, count=40)
+            logger.info(f"尝试通过 VxTwitter 接口获取推文详情: {tweet_id}")
+            url = f"https://api.vxtwitter.com/Twitter/status/{tweet_id}"
             
-            for tweet in recent_tweets:
-                if str(tweet.get("id")) == str(tweet_id):
-                    logger.info(f"在近期推文中成功找到了目标推文 {tweet_id}")
-                    return tweet
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as resp:
+                    if resp.status != 200:
+                        logger.error(f"VxTwitter 未找到推文 {tweet_id}：{resp.status}")
+                        return None
+                        
+                    data = await resp.json()
                     
-            logger.error(f"在近期推文中未找到推文 {tweet_id}，可能是较老的推文或不同用户的推文")
-            return None
+                    # 提取媒体
+                    media_list = []
+                    media_extended = data.get('media_extended', [])
+                    for m in media_extended:
+                        media_list.append({
+                            'url': m.get('url'),
+                            'type': m.get('type')  # 'video' or 'image'
+                        })
+                    
+                    # 提取时间
+                    created_at_epoch = data.get('date_epoch')
+                    if created_at_epoch:
+                        dt = datetime.fromtimestamp(created_at_epoch, tz=timezone.utc)
+                    else:
+                        dt = datetime.now(timezone.utc)
+                        
+                    # 组合与 get_latest_tweets 结构一致的字典
+                    tweet_info = {
+                        'id': int(data.get('tweetID', tweet_id)),
+                        'text': data.get('text', ''),
+                        'created_at': dt,
+                        'url': data.get('tweetURL', f"https://twitter.com/i/status/{tweet_id}"),
+                        'username': data.get('user_screen_name', username or 'Unknown'),
+                        'media': media_list
+                    }
+                    
+                    logger.info(f"成功获取单推文 {tweet_id} 详情！")
+                    return tweet_info
 
         except Exception as e:
-            logger.error(f"获取推文详情失败: {e}")
+            logger.error(f"获取推文 {tweet_id} 详情失败: {e}")
             return None
     
     async def check_new_tweets(self, username):

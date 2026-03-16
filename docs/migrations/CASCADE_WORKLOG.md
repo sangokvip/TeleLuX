@@ -94,3 +94,14 @@
 - **风险自查**:
   - 经过多轮实测，已成功提取到指定用户的推文列表和 ID，确认逻辑闭环。
 - **回滚点**: 
+
+### 6) Feature: 彻底重构单推文获取 (接入 VxTwitter API)
+- **变更文件**: `twitter_monitor.py`
+- **背景与目标**: `twitter241` API 无法直接通过 ID 获取单条推文，原先采用的“拉取最新 Timeline 暴力查找”方式，若用户发送的推文较老（例如 5 天前）或者非常活跃，推文很容易直接被漏掉导致经常出现“未找到该推文”。因此，我找到了业界常用的免费全开放 API (api.vxtwitter.com)，实现单推文精准直取。
+- **技术实施**:
+  - 重写了 `get_tweet_by_id` 方法。
+  - 使用 `aiohttp` 访问 `https://api.vxtwitter.com/Twitter/status/{tweet_id}` 接口。
+  - 适配了其特有的 `media_extended` 媒体字段、`date_epoch` 时间戳以及基本文案返回信息，转为原有格式的 `tweet_info`。
+- **风险自查**:
+  - 返回结构的键名 (`id, text, created_at, url, username, media`) 均与原有 `get_latest_tweets` 保持绝对一致，与 `main.py` 无缝兼容。
+- **回滚点**: 
