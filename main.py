@@ -1460,9 +1460,11 @@ class TeleLuXBot:
             new_tweets = await self.twitter_monitor.check_new_tweets(username)
             
             if new_tweets:
-                logger.info(f"📢 发现 {len(new_tweets)} 条新推文")
+                # 每次自动转发仅限前三条推文
+                display_tweets = new_tweets[:3]
+                logger.info(f"📢 发现 {len(new_tweets)} 条新推文，将转发前 {len(display_tweets)} 条")
                 
-                for tweet in new_tweets:
+                for tweet in display_tweets:
                     try:
                         tweet_text = tweet.get('text', '')
                         if tweet_text and len(tweet_text) > 800:

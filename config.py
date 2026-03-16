@@ -90,7 +90,7 @@ class Config:
     
     # 监控配置
     TWITTER_USERNAME = None  # 要监控的Twitter用户名
-    CHECK_INTERVAL = 300  # 检查间隔（秒），默认5分钟
+    CHECK_INTERVAL = 86400  # 检查间隔（秒），默认24小时
     
     # 数据库配置
     DATABASE_PATH = None
@@ -113,7 +113,7 @@ class Config:
         
         # 监控配置
         cls.TWITTER_USERNAME = cls.get_config('TWITTER_USERNAME', required=True)  # 要监控的Twitter用户名
-        cls.CHECK_INTERVAL = cls.get_int_config('CHECK_INTERVAL', 300)  # 检查间隔（秒），默认5分钟
+        cls.CHECK_INTERVAL = cls.get_int_config('CHECK_INTERVAL', 86400)  # 检查间隔（秒），默认24小时
         
         # 数据库配置 - 融合两个版本的实现
         cls.DATABASE_PATH = cls.get_config('DATABASE_PATH', 'tweets.db')
