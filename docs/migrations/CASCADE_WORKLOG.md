@@ -105,3 +105,12 @@
 - **风险自查**:
   - 返回结构的键名 (`id, text, created_at, url, username, media`) 均与原有 `get_latest_tweets` 保持绝对一致，与 `main.py` 无缝兼容。
 - **回滚点**: 
+
+### 7) Fix: 修复转发推文缺失预览图的问题
+- **变更文件**: `twitter_monitor.py`
+- **背景与目标**: 用户反馈转发推文时不显示视频预览图。经核查，新接入的 `get_tweet_by_id` 方法中缺少了 `preview_image_url` 字段，导致主程序退化为发送纯文本消息。
+- **技术实施**:
+  - 在 `get_tweet_by_id` 中从 `media_extended` 提取 `thumbnail_url` 并映射至顶层字段。
+  - 增强了 `get_latest_tweets` 的解析逻辑，支持解析 `TweetWithVisibilityResults` 嵌套结构，提升自动化监控的稳定性。
+- **风险自查**: 已通过测试脚本验证 VxTwitter 接口返回的预览图链接正常工作。
+- **回滚点**: 

@@ -156,8 +156,14 @@ class TwitterMonitor:
                     # 我们只处理普通的 Tweet
                     if content.get("entryType") == "TimelineTimelineItem":
                         item_result = content.get("itemContent", {}).get("tweet_results", {}).get("result", {})
-                        
-                        # 排除转推 (可以看情况保留，这里暂时过滤被转推内容的嵌套结构)
+                        if not item_result:
+                            continue
+                            
+                        # 处理 TweetWithVisibilityResults 嵌套
+                        if item_result.get("__typename") == "TweetWithVisibilityResults":
+                            item_result = item_result.get("tweet", {})
+                            
+                        # 排除转推
                         legacy = item_result.get("legacy", {})
                         if not legacy or legacy.get("retweeted_status_result"):
                             continue  # 跳过转推
@@ -246,12 +252,20 @@ class TwitterMonitor:
                     
                     # 提取媒体
                     media_list = []
+                    preview_image_url = None
                     media_extended = data.get('media_extended', [])
                     for m in media_extended:
+                        m_type = m.get('type')
+                        m_url = m.get('url')
+                        m_thumb = m.get('thumbnail_url')
+                        
                         media_list.append({
-                            'url': m.get('url'),
-                            'type': m.get('type')  # 'video' or 'image'
+                            'url': m_url,
+                            'type': m_type,
+                            'preview_image_url': m_thumb or m_url
                         })
+                        if not preview_image_url:
+                            preview_image_url = m_thumb or m_url
                     
                     # 提取时间
                     created_at_epoch = data.get('date_epoch')
@@ -267,6 +281,7 @@ class TwitterMonitor:
                         'created_at': dt,
                         'url': data.get('tweetURL', f"https://twitter.com/i/status/{tweet_id}"),
                         'username': data.get('user_screen_name', username or 'Unknown'),
+                        'preview_image_url': preview_image_url,
                         'media': media_list
                     }
                     
