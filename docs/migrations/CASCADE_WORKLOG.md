@@ -123,3 +123,27 @@
   - 修改 `main.py` 中的 Twitter 监控循环，对获取到的新推文列表进行切片操作 (`new_tweets[:3]`)，仅处理前三条。
 - **风险自查**: 已验证环境变量覆盖逻辑和代码切片逻辑正常工作。
 - **回滚点**: 
+
+### 9) Security: 修复凭证泄露导致的机器人被控问题
+- **变更文件**: `env.txt`, `damabluechaiENV.txt`, `.gitignore`
+- **背景与目标**: 机器人被恶意他人控制发送广告。经查是因为包含 Token 的配置文件被追踪进 Git 仓库导致泄露。需立即移除 Git 跟踪并加强忽略规则。
+- **技术实施**:
+  - 使用 `git rm --cached` 将 `env.txt` 和 `damabluechaiENV.txt` 从 Git 索引中移除（保留本地文件）。
+  - 确认 `.gitignore` 中已包含上述文件，防止再次被提交。
+  - 建议用户立即通过 @BotFather 撤销旧 Token 并更换新 Token。
+- **风险自查**: 
+  - 本次操作仅涉及 Git 索引管理，不影响本地文件内容和 VPS 运行。
+  - 已验证执行后 `git ls-files` 不再包含上述文件。
+- **回滚点**: `git add env.txt damabluechaiENV.txt` 可恢复跟踪（不建议）。
+
+### 10) Security: 限制推文链接自动分享权限
+- **变更文件**: `config.py`, `main.py`
+- **背景与目标**: 为了进一步提升安全性，限制只有特定账号（mteacherlu, bryansuperb）发送的 Twitter 链接才会被机器人自动处理并转发到群组。其他用户发送的链接仅会被转发给管理员。
+- **技术实施**:
+  - 在 `config.py` 中增加 `ALLOWED_USERNAMES` 配置项，默认包含两个授权账号。
+  - 在 `main.py` 的 `handle_message` 方法中增加逻辑判断：检测到 Twitter URL 后校验发送者 `username`。
+  - 非授权用户发送的链接将跳过自动处理流程，保留既有的“私信转发管理员”机制。
+- **风险自查**: 
+  - 默认已处理用户名大小写不敏感匹配。
+  - 已验证非授权用户发送的内容仍能通过既有逻辑转发给管理员，不会丢失消息。
+- **回滚点**: `git checkout HEAD -- config.py main.py`

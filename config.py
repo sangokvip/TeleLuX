@@ -87,6 +87,7 @@ class Config:
     TELEGRAM_BOT_TOKEN = None
     TELEGRAM_CHAT_ID = None
     ADMIN_CHAT_ID = None  # bryansuperb 的 Chat ID
+    ALLOWED_USERNAMES = []  # 允许发送链接的用户名列表
     
     # 监控配置
     TWITTER_USERNAME = None  # 要监控的Twitter用户名
@@ -114,6 +115,10 @@ class Config:
         # 监控配置
         cls.TWITTER_USERNAME = cls.get_config('TWITTER_USERNAME', required=True)  # 要监控的Twitter用户名
         cls.CHECK_INTERVAL = cls.get_int_config('CHECK_INTERVAL', 86400)  # 检查间隔（秒），默认24小时
+        
+        # 允许发送链接的用户名列表
+        allowed_str = cls.get_config('ALLOWED_USERNAMES', 'mteacherlu,bryansuperb')
+        cls.ALLOWED_USERNAMES = [u.strip().lower() for u in allowed_str.split(',') if u.strip()]
         
         # 数据库配置 - 融合两个版本的实现
         cls.DATABASE_PATH = cls.get_config('DATABASE_PATH', 'tweets.db')

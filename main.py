@@ -82,6 +82,8 @@ class TeleLuXBot:
             '怎么入群': '想要解锁更多专属内容吗？🤫\n目前有【视频课堂群】和【女女群】等多种选择哦！',
         }
         self.auto_reply_enabled = True  # 是否启用智能回复
+        # 允许发送链接的用户名列表
+        self.allowed_usernames = Config.ALLOWED_USERNAMES
         
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理收到的消息"""
@@ -335,9 +337,14 @@ class TeleLuXBot:
                     logger.info(f"⏱️ 收到设置间隔命令 (来自用户: {user_name})")
 
                 elif self._is_twitter_url(message_text):
-                    # 处理私信发送的Twitter URL
-                    if self.twitter_monitor:
-                        logger.info(f"收到Twitter URL: {message_text}")
+                    # 检查是否是授权用户发送的链接
+                    sender_username = update.effective_user.username.lower() if update.effective_user.username else ""
+                    
+                    if sender_username not in self.allowed_usernames:
+                        logger.info(f"🚫 用户 @{sender_username} (ID: {update.effective_user.id}) 尝试发送链接，但未获授权")
+                        # 不进入自动处理流程，直接跳出，后续逻辑会将其转发给管理员
+                    elif self.twitter_monitor:
+                        logger.info(f"✅ 授权用户 @{sender_username} 发送了 Twitter URL: {message_text}")
 
                         try:
                             # 从URL提取推文ID
