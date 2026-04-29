@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "1.0",
+  "worklogId": "2026-04-29-tweet-order-button",
+  "date": "2026-04-29",
+  "summary": "为机器人转发推文消息增加“点击自助下单进群”内联按钮，点击后跳转到下单机器人。",
+  "trigger": "用户要求机器人转发推文时，在推文下方添加按钮，通过按钮直接转到下单机器人。",
+  "changes": [
+    {
+      "category": "Telegram 推文转发",
+      "files": [
+        "main.py"
+      ],
+      "details": [
+        "新增下单机器人按钮常量和统一的 InlineKeyboardMarkup 创建方法。",
+        "授权用户私聊发送 Twitter/X 链接后转发到群组的推文消息，已在纯文本消息和带预览图消息两种发送方式中加入按钮。",
+        "定时监控到新推文后自动转发到群组的推文消息，已在纯文本消息和带预览图消息两种发送方式中加入按钮。"
+      ],
+      "reason": "保证所有主程序推文转发消息下方都能直接引导用户自助下单进群。"
+    },
+    {
+      "category": "备用通知入口",
+      "files": [
+        "telegram_bot.py"
+      ],
+      "details": [
+        "为 TelegramNotifier 的推文通知发送补充下单按钮。",
+        "为 TelegramBotListener 中的最新推文发送补充下单按钮。"
+      ],
+      "reason": "项目中仍保留备用机器人通知实现，同步按钮逻辑可以避免以后走备用入口时行为不一致。"
+    }
+  ],
+  "validation": [
+    {
+      "command": "python3 -m py_compile main.py telegram_bot.py",
+      "result": "通过，未发现 Python 语法或导入错误。"
+    },
+    {
+      "command": "git diff -- main.py telegram_bot.py",
+      "result": "已检查差异，改动仅限推文发送时增加 reply_markup 和按钮创建逻辑。"
+    }
+  ],
+  "knownLimitations": [
+    "未连接 Telegram 生产 Bot 发送真实消息，避免触发线上群组通知。",
+    "按钮目标沿用项目现有下单机器人地址：https://t.me/Lulaoshi_bot。"
+  ],
+  "deploymentNotes": [
+    "部署更新后的 main.py 和 telegram_bot.py 后重启机器人进程即可生效。",
+    "如果 VPS 使用旧文件缓存或 systemd 服务，需要执行对应服务重启命令。"
+  ]
+}

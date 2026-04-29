@@ -23,6 +23,9 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+ORDER_BOT_URL = "https://t.me/Lulaoshi_bot"
+ORDER_BOT_BUTTON_TEXT = "点击自助下单进群"
+
 class TeleLuXBot:
     """TeleLuX完整版机器人"""
     
@@ -84,6 +87,13 @@ class TeleLuXBot:
         self.auto_reply_enabled = True  # 是否启用智能回复
         # 允许发送链接的用户名列表
         self.allowed_usernames = Config.ALLOWED_USERNAMES
+
+    def _create_order_bot_button(self):
+        """创建跳转下单机器人的内联按钮。"""
+        keyboard = [
+            [InlineKeyboardButton(ORDER_BOT_BUTTON_TEXT, url=ORDER_BOT_URL)]
+        ]
+        return InlineKeyboardMarkup(keyboard)
         
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理收到的消息"""
@@ -390,14 +400,16 @@ class TeleLuXBot:
                                         chat_id=self.chat_id,
                                         photo=preview_url,
                                         caption=tweet_message,
-                                        parse_mode='HTML'
+                                        parse_mode='HTML',
+                                        reply_markup=self._create_order_bot_button()
                                     )
                                 else:
                                     await context.bot.send_message(
                                         chat_id=self.chat_id,
                                         text=tweet_message,
                                         parse_mode='HTML',
-                                        disable_web_page_preview=False
+                                        disable_web_page_preview=False,
+                                        reply_markup=self._create_order_bot_button()
                                     )
 
                                 # 给私聊用户发送确认消息
@@ -1497,14 +1509,16 @@ class TeleLuXBot:
                                 chat_id=self.chat_id,
                                 photo=preview_url,
                                 caption=tweet_message,
-                                parse_mode='HTML'
+                                parse_mode='HTML',
+                                reply_markup=self._create_order_bot_button()
                             )
                         else:
                             await self.application.bot.send_message(
                                 chat_id=self.chat_id,
                                 text=tweet_message,
                                 parse_mode='HTML',
-                                disable_web_page_preview=False
+                                disable_web_page_preview=False,
+                                reply_markup=self._create_order_bot_button()
                             )
                         
                         self.stats['tweets_sent'] += 1

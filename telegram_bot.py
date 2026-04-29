@@ -1,12 +1,15 @@
 import asyncio
 import logging
-from telegram import Bot, Update
+from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from telegram.error import TelegramError
 from config import Config
 from utils import utils
 
 logger = logging.getLogger(__name__)
+
+ORDER_BOT_URL = "https://t.me/Lulaoshi_bot"
+ORDER_BOT_BUTTON_TEXT = "点击自助下单进群"
 
 class TelegramNotifier:
     """Telegram通知类"""
@@ -15,6 +18,13 @@ class TelegramNotifier:
         self.bot_token = Config.TELEGRAM_BOT_TOKEN
         self.chat_id = Config.TELEGRAM_CHAT_ID
         self.bot = Bot(token=self.bot_token)
+
+    def _create_order_bot_button(self):
+        """创建跳转下单机器人的内联按钮。"""
+        keyboard = [
+            [InlineKeyboardButton(ORDER_BOT_BUTTON_TEXT, url=ORDER_BOT_URL)]
+        ]
+        return InlineKeyboardMarkup(keyboard)
     
     async def send_tweet_notification(self, username, tweet_text, tweet_url, created_at):
         """发送推文通知"""
@@ -27,7 +37,8 @@ class TelegramNotifier:
                 chat_id=self.chat_id,
                 text=message,
                 parse_mode='HTML',
-                disable_web_page_preview=False
+                disable_web_page_preview=False,
+                reply_markup=self._create_order_bot_button()
             )
             
             logger.info(f"成功发送推文通知: {tweet_url}")
@@ -118,6 +129,13 @@ class TelegramBotListener:
         self.chat_id = Config.TELEGRAM_CHAT_ID
         self.twitter_monitor = twitter_monitor
         self.application = None
+
+    def _create_order_bot_button(self):
+        """创建跳转下单机器人的内联按钮。"""
+        keyboard = [
+            [InlineKeyboardButton(ORDER_BOT_BUTTON_TEXT, url=ORDER_BOT_URL)]
+        ]
+        return InlineKeyboardMarkup(keyboard)
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理收到的消息"""
@@ -215,7 +233,8 @@ class TelegramBotListener:
                             chat_id=self.chat_id,
                             text=message,
                             parse_mode='HTML',
-                            disable_web_page_preview=False
+                            disable_web_page_preview=False,
+                            reply_markup=self._create_order_bot_button()
                         )
 
                         logger.info("成功发送最新推文")
