@@ -60,7 +60,7 @@ python3 -m venv venv
 source venv/bin/activate
 
 # 安装依赖
-pip install python-telegram-bot==20.7 tweepy==4.14.0 python-dotenv==1.0.0 requests==2.31.0 schedule==1.2.0
+pip install python-telegram-bot==20.7 tweepy==4.14.0 python-dotenv==1.0.0 aiohttp==3.9.5
 ```
 
 #### 方法B：从本地上传文件
@@ -97,16 +97,19 @@ nano .env
 
 在`.env`文件中填入你的配置：
 ```env
-# Twitter API 配置
-TWITTER_BEARER_TOKEN=你的Twitter_Bearer_Token
+# Twitter/X RapidAPI 配置
+RAPIDAPI_KEY=你的RapidAPI_Key
 
 # Telegram 配置
 TELEGRAM_BOT_TOKEN=你的Telegram_Bot_Token
 TELEGRAM_CHAT_ID=你的Telegram_Chat_ID
+ADMIN_CHAT_ID=你的管理员Chat_ID
+ADMIN_USER_IDS=你的管理员User_ID
 
 # 监控配置
 TWITTER_USERNAME=xiuchiluchu910
-CHECK_INTERVAL=3000
+CHECK_INTERVAL=28800
+ALLOWED_USERNAMES=mteacherlu,bryansuperb
 ```
 
 ### 第四步：测试运行

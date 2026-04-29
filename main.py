@@ -7,6 +7,7 @@ TeleLuX - Twitter监控和Telegram通知系统
 import asyncio
 import logging
 import random
+import re
 from datetime import datetime, timedelta
 from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, ChatMemberHandler, filters, ContextTypes
@@ -94,6 +95,32 @@ class TeleLuXBot:
             [InlineKeyboardButton(ORDER_BOT_BUTTON_TEXT, url=ORDER_BOT_URL)]
         ]
         return InlineKeyboardMarkup(keyboard)
+
+    def _is_admin(self, update: Update) -> bool:
+        """使用 Telegram user.id 判断管理员身份。"""
+        user = update.effective_user
+        return bool(user and user.id in Config.ADMIN_USER_IDS)
+
+    def _format_tweet_message(self, title: str, username: str, tweet_text: str, tweet_url: str, created_at) -> str:
+        """格式化推文消息，保证 HTML 字段已转义并限制链接域名。"""
+        safe_username = username if utils.is_safe_twitter_username(username) else Config.TWITTER_USERNAME
+        safe_username = safe_username if utils.is_safe_twitter_username(safe_username) else "i"
+        display_username = utils.escape_html(username or safe_username)
+        safe_tweet_url = tweet_url if utils.is_safe_twitter_url(tweet_url) else f"https://x.com/{safe_username}"
+
+        if hasattr(created_at, 'strftime'):
+            time_text = created_at.strftime('%Y-%m-%d %H:%M:%S UTC')
+        else:
+            time_text = utils.escape_html(str(created_at or '未知'))
+
+        return f"""{title}
+
+👤 <b>用户:</b> <a href="https://x.com/{safe_username}">{display_username}</a>
+📝 <b>内容:</b>
+{utils.escape_html(tweet_text or '')}
+🕒 <b>时间:</b> {time_text}
+
+🔗 <a href="{safe_tweet_url}">查看原推文</a>"""
         
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理收到的消息"""
@@ -108,7 +135,7 @@ class TeleLuXBot:
             logger.info(f"收到消息: '{message_text}' 来自: {user_name} (Chat ID: {chat_id}, 类型: {chat_type})")
             
             admin_chat_id = Config.ADMIN_CHAT_ID
-            is_admin_chat = admin_chat_id and str(chat_id) == str(admin_chat_id)
+            is_admin_chat = self._is_admin(update)
 
             # 处理私聊消息
             if chat_type == 'private':
@@ -130,11 +157,11 @@ class TeleLuXBot:
                                     target_chat_id = line.split("Chat ID:")[1].strip()
                                     break
                             
-                            if target_chat_id:
+                            if target_chat_id and target_chat_id.lstrip('-').isdigit():
                                 # 发送回复给用户
                                 await context.bot.send_message(
                                     chat_id=target_chat_id,
-                                    text=f"📩 <b>管理员回复:</b>\n\n{message_text}",
+                                    text=f"📩 <b>管理员回复:</b>\n\n{utils.escape_html(message_text)}",
                                     parse_mode='HTML'
                                 )
                                 # 确认发送成功
@@ -368,7 +395,6 @@ class TeleLuXBot:
                                 return
 
                             # 尝试提取用户名以帮助准确检索推文
-                            import re
                             username_match = re.search(r'twitter\.com/([^/]+)/status', message_text) or re.search(r'x\.com/([^/]+)/status', message_text)
                             username = username_match.group(1) if username_match else None
                             
@@ -381,17 +407,18 @@ class TeleLuXBot:
                                 if tweet_text and len(tweet_text) > 800:
                                     tweet_text = tweet_text[:800] + "..."
 
-                                tweet_message = f"""
-🐦 <b>推文分享</b>
-
-👤 <b>用户:</b> <a href=\"https://x.com/{tweet_info['username']}\">{tweet_info['username']}</a>
-📝 <b>内容:</b> {utils.escape_html(tweet_text)}
-🕒 <b>时间:</b> {tweet_info['created_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}
-"""
-
-                                tweet_message += f"\n\n🔗 <a href=\"{tweet_info['url']}\">查看原推文</a>".strip()
+                                tweet_message = self._format_tweet_message(
+                                    "🐦 <b>推文分享</b>",
+                                    tweet_info.get('username', ''),
+                                    tweet_text,
+                                    tweet_info.get('url', ''),
+                                    tweet_info.get('created_at')
+                                )
 
                                 preview_url = tweet_info.get('preview_image_url')
+                                if preview_url and not utils.is_safe_twitter_media_url(preview_url):
+                                    logger.warning(f"跳过不在白名单内的推文预览图: {preview_url}")
+                                    preview_url = None
                                 if preview_url:
                                     if len(tweet_message) > 900:
                                         tweet_message = tweet_message[:900] + "..."
@@ -560,10 +587,14 @@ class TeleLuXBot:
                     except:
                         time_str = str(added_at)[:16]
 
-                    message += f"""<b>{i}.</b> {utils.escape_html(user_name or '未知用户')}
+                    safe_user_name = utils.escape_html(user_name or '未知用户')
+                    safe_username = utils.escape_html(username or '无')
+                    safe_reason = utils.escape_html(reason or '未记录')
+
+                    message += f"""<b>{i}.</b> {safe_user_name}
 • ID: <code>{user_id}</code>
-• 用户名: @{username or '无'}
-• 原因: {reason}
+• 用户名: @{safe_username}
+• 原因: {safe_reason}
 • 离群次数: {leave_count}
 • 加入时间: {time_str}
 
@@ -605,7 +636,7 @@ class TeleLuXBot:
                 user_info = ""
                 user_data = self.user_activity_manager.get(str(user_id))
                 if user_data:
-                    user_info = f" ({user_data['user_name']})"
+                    user_info = f" ({utils.escape_html(user_data['user_name'])})"
 
                 await context.bot.send_message(
                     chat_id=chat_id,
@@ -669,7 +700,7 @@ class TeleLuXBot:
 
 👤 <b>用户信息:</b>
 • 姓名: {utils.escape_html(user_name)}
-• 用户名: @{username}
+• 用户名: @{utils.escape_html(username)}
 • 用户ID: {user_id}
 • Chat ID: {chat_id}
 
@@ -914,7 +945,7 @@ class TeleLuXBot:
 
 👤 <b>用户信息:</b>
 • 姓名: {utils.escape_html(user_name)}
-• 用户名: @{username}
+• 用户名: @{utils.escape_html(username)}
 • ID: {user_id}
 
 📊 <b>活动统计:</b>
@@ -979,7 +1010,7 @@ class TeleLuXBot:
 
 👤 <b>用户信息:</b>
 • 姓名: {utils.escape_html(user_name)}
-• 用户名: @{username}
+• 用户名: @{utils.escape_html(username)}
 • ID: {user_id}
 
 📊 <b>统计信息:</b>
@@ -1490,17 +1521,19 @@ class TeleLuXBot:
                             tweet_text = tweet_text[:800] + "..."
 
                         # 构建推文消息
-                        tweet_message = f"""🐦 <b><a href=\"https://x.com/{username}\">{username}</a> 发布了新推文</b>
-
-📝 <b>内容:</b>
-{utils.escape_html(tweet_text)}
-
-🕒 <b>时间:</b> {tweet['created_at'].strftime('%Y-%m-%d %H:%M:%S') if hasattr(tweet['created_at'], 'strftime') else tweet['created_at']}
-
-🔗 <a href="{tweet['url']}">查看原推文</a>"""
+                        tweet_message = self._format_tweet_message(
+                            "🐦 <b>发布了新推文</b>",
+                            tweet.get('username') or username,
+                            tweet_text,
+                            tweet.get('url', ''),
+                            tweet.get('created_at')
+                        )
 
                         # 发送到群组
                         preview_url = tweet.get('preview_image_url')
+                        if preview_url and not utils.is_safe_twitter_media_url(preview_url):
+                            logger.warning(f"跳过不在白名单内的推文预览图: {preview_url}")
+                            preview_url = None
                         if preview_url:
                             if len(tweet_message) > 900:
                                 tweet_message = tweet_message[:900] + "..."
@@ -1522,6 +1555,14 @@ class TeleLuXBot:
                             )
                         
                         self.stats['tweets_sent'] += 1
+                        if self.database:
+                            self.database.mark_tweet_processed(
+                                str(tweet['id']),
+                                tweet.get('username') or username,
+                                tweet.get('url', ''),
+                                tweet.get('text', ''),
+                                str(tweet.get('created_at', ''))
+                            )
                         self._log_activity('tweet_sent', f"推文ID: {tweet['id']}")
                         logger.info(f"✅ 已发送推文到群组: {tweet['id']}")
                         
@@ -1609,7 +1650,7 @@ class TeleLuXBot:
 • 黑名单用户: {blacklist_count} 人
 
 🔧 <b>系统配置:</b>
-• 监控用户: @{Config.TWITTER_USERNAME}
+• 监控用户: @{utils.escape_html(Config.TWITTER_USERNAME)}
 • 检查间隔: {self.twitter_check_interval} 秒
 • 启动时间: {self.stats['start_time'].strftime('%Y-%m-%d %H:%M:%S')}"""
 
@@ -1643,9 +1684,9 @@ class TeleLuXBot:
             logs_text = "📋 <b>最近操作日志</b>\n\n"
             for i, log in enumerate(recent_logs, 1):
                 time_str = log['time'].strftime('%m-%d %H:%M:%S')
-                logs_text += f"{i}. [{time_str}] <b>{log['action']}</b>\n"
+                logs_text += f"{i}. [{time_str}] <b>{utils.escape_html(log['action'])}</b>\n"
                 if log['details']:
-                    logs_text += f"   {log['details']}\n"
+                    logs_text += f"   {utils.escape_html(log['details'])}\n"
             
             await context.bot.send_message(
                 chat_id=chat_id,
@@ -1896,7 +1937,7 @@ class TeleLuXBot:
             await self.application.initialize()
             await self.application.start()
             await self.application.updater.start_polling(
-                allowed_updates=Update.ALL_TYPES,
+                allowed_updates=['message', 'chat_member'],
                 drop_pending_updates=True
             )
             

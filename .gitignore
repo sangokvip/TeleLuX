@@ -121,12 +121,21 @@ celerybeat.pid
 
 # Environments
 .env
+*.env
+env.txt
+*ENV.txt
 .venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Local runtime data and archives
+*.db
+*.sqlite
+*.sqlite3
+_temp_archive/
 
 # Spyder project settings
 .spyderproject

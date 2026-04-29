@@ -21,7 +21,11 @@ class StandaloneReplyBot:
     def __init__(self):
         self.bot_token = Config.TELEGRAM_BOT_TOKEN
         self.admin_chat_id = Config.ADMIN_CHAT_ID
+        self.admin_user_ids = set(Config.ADMIN_USER_IDS)
         self.application = None
+
+    def _is_admin_user(self, user_id) -> bool:
+        return user_id in self.admin_user_ids
         
     async def handle_private_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理私信并转发给管理员"""
@@ -97,13 +101,16 @@ class StandaloneReplyBot:
             callback_data = query.data
             
             # 检查是否是管理员操作
-            if str(query.from_user.id) != str(self.admin_chat_id):
+            if not self._is_admin_user(query.from_user.id):
                 await query.edit_message_text("❌ 只有管理员可以使用此功能")
                 return
             
             # 解析回调数据
             if '_' in callback_data:
                 action, target_chat_id = callback_data.split('_', 1)
+                if not target_chat_id.lstrip('-').isdigit():
+                    await query.edit_message_text("❌ 无效的目标用户 ID")
+                    return
                 
                 if action == "reply":
                     reply_message = f"""💬 <b>回复用户消息</b>
@@ -162,7 +169,7 @@ class StandaloneReplyBot:
 
 👤 <b>用户 Chat ID:</b> {target_chat_id}
 🚨 <b>标记时间:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-👮 <b>操作管理员:</b> {query.from_user.first_name or query.from_user.username}
+👮 <b>操作管理员:</b> {self._escape_html(query.from_user.first_name or query.from_user.username or str(query.from_user.id))}
 
 📝 <b>建议操作:</b>
 • 密切关注该用户后续行为
@@ -188,7 +195,7 @@ class StandaloneReplyBot:
         """处理回复命令"""
         try:
             # 检查是否是管理员
-            if str(update.effective_user.id) != str(self.admin_chat_id):
+            if not self._is_admin_user(update.effective_user.id):
                 await update.message.reply_text("❌ 只有管理员可以使用此命令")
                 return
             
@@ -204,6 +211,9 @@ class StandaloneReplyBot:
             
             target_chat_id = parts[1]
             reply_content = parts[2]
+            if not target_chat_id.lstrip('-').isdigit():
+                await update.message.reply_text("❌ 目标 Chat ID 必须是数字")
+                return
             
             # 发送回复消息
             await context.bot.send_message(

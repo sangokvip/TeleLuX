@@ -35,8 +35,7 @@ cat > requirements.txt << 'EOF'
 python-telegram-bot==20.7
 tweepy==4.14.0
 python-dotenv==1.0.0
-requests==2.31.0
-schedule==1.2.0
+aiohttp==3.9.5
 EOF
 
 # 创建config.py
@@ -49,12 +48,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    # Twitter API配置
+    # Twitter/X RapidAPI配置
+    RAPIDAPI_KEY = os.getenv('RAPIDAPI_KEY')
     TWITTER_BEARER_TOKEN = os.getenv('TWITTER_BEARER_TOKEN')
     
     # Telegram配置
     TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
     TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+    ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID')
+    ADMIN_USER_IDS = [int(x.strip()) for x in os.getenv('ADMIN_USER_IDS', ADMIN_CHAT_ID or '').split(',') if x.strip().isdigit()]
     
     # 监控配置
     TWITTER_USERNAME = os.getenv('TWITTER_USERNAME', 'xiuchiluchu910')
@@ -67,7 +69,7 @@ class Config:
     def validate(cls):
         """验证必需的配置项"""
         required_configs = [
-            ('TWITTER_BEARER_TOKEN', cls.TWITTER_BEARER_TOKEN),
+            ('RAPIDAPI_KEY', cls.RAPIDAPI_KEY),
             ('TELEGRAM_BOT_TOKEN', cls.TELEGRAM_BOT_TOKEN),
             ('TELEGRAM_CHAT_ID', cls.TELEGRAM_CHAT_ID),
         ]
@@ -86,16 +88,19 @@ EOF
 # 创建.env文件模板
 echo "🔧 创建环境变量模板..."
 cat > .env << 'EOF'
-# Twitter API 配置
-TWITTER_BEARER_TOKEN=your_twitter_bearer_token_here
+# Twitter/X RapidAPI 配置
+RAPIDAPI_KEY=your_rapidapi_key_here
 
 # Telegram 配置
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 TELEGRAM_CHAT_ID=your_telegram_chat_id_here
+ADMIN_CHAT_ID=your_admin_chat_id_here
+ADMIN_USER_IDS=your_admin_user_id_here
 
 # 监控配置
 TWITTER_USERNAME=xiuchiluchu910
-CHECK_INTERVAL=3000
+CHECK_INTERVAL=28800
+ALLOWED_USERNAMES=mteacherlu,bryansuperb
 
 # 数据库配置
 DATABASE_PATH=tweets.db
@@ -145,6 +150,9 @@ Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
 
 [Install]
 WantedBy=multi-user.target

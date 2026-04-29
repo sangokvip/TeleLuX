@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "1.0",
+  "worklogId": "2026-04-29-security-hardening",
+  "date": "2026-04-29",
+  "summary": "根据安全与功能审查报告完成首轮 P0/P1 加固，覆盖密钥样例清理、管理员权限、HTML 输出转义、第三方 URL 校验、推文去重时机、旧入口 async 修复和部署配置同步。",
+  "trigger": "用户确认“开始工作吧”，要求按审查建议进入实施。",
+  "changes": [
+    {
+      "category": "密钥与仓库卫生",
+      "files": [
+        ".env.example",
+        ".gitignore",
+        "tweets.db",
+        "_temp_archive/"
+      ],
+      "details": [
+        "将 .env.example 中疑似真实 Twitter 凭据替换为占位符，并改为当前主流程使用的 RAPIDAPI_KEY。",
+        "新增 env.txt、*ENV.txt、*.db、_temp_archive/ 等忽略规则。",
+        "通过 git rm --cached 将 tweets.db 和 _temp_archive/ 从 Git 索引移除，保留本地文件不删除。"
+      ],
+      "reason": "降低密钥、数据库和临时诊断脚本被继续提交的风险。"
+    },
+    {
+      "category": "权限与输入输出安全",
+      "files": [
+        "config.py",
+        "main.py",
+        "standalone_reply_bot.py",
+        "utils.py"
+      ],
+      "details": [
+        "新增 ADMIN_USER_IDS allowlist，管理命令改为基于 Telegram user.id 判断。",
+        "管理员回复、黑名单、日志、用户通知、推文消息等 HTML 输出增加转义。",
+        "新增 Twitter/X 链接、媒体链接和用户名格式校验。"
+      ],
+      "reason": "减少误授权、Telegram HTML 解析失败和第三方字段注入风险。"
+    },
+    {
+      "category": "推文转发稳定性",
+      "files": [
+        "twitter_monitor.py",
+        "main.py",
+        "telegram_bot.py"
+      ],
+      "details": [
+        "VxTwitter 单推文请求增加 tweet_id 数字校验、15 秒超时和返回 URL allowlist。",
+        "自动推文改为发送成功后再标记 processed，避免发送失败导致永久漏发。",
+        "修复 telegram_bot.py 备用入口调用 async get_latest_tweets 未 await 的问题。"
+      ],
+      "reason": "提升第三方接口异常场景下的安全性和推文投递可靠性。"
+    },
+    {
+      "category": "部署与文档",
+      "files": [
+        "requirements.txt",
+        "deploy_script.sh",
+        "quick_deploy.sh",
+        "README.md",
+        "VPS_DEPLOY_GUIDE.md"
+      ],
+      "details": [
+        "固定 aiohttp==3.9.5，移除部署脚本中过时的 requests/schedule 依赖。",
+        "部署脚本和文档同步 RAPIDAPI_KEY、ADMIN_USER_IDS、ALLOWED_USERNAMES 和 28800 秒默认检查间隔。",
+        "systemd 服务模板增加 NoNewPrivileges、PrivateTmp、ProtectSystem 基础加固项。"
+      ],
+      "reason": "避免新环境部署出旧依赖或旧配置，并提升服务运行隔离。"
+    }
+  ],
+  "validation": [
+    {
+      "command": "python3 -m py_compile main.py telegram_bot.py standalone_reply_bot.py twitter_monitor.py database.py utils.py config.py",
+      "result": "通过，未发现 Python 语法错误。"
+    },
+    {
+      "command": "bash -n deploy_script.sh quick_deploy.sh update_vps.sh fix_twitter_issue.sh fix_vps_memory_manager.sh",
+      "result": "通过，未发现 shell 语法错误。"
+    },
+    {
+      "command": "python3 -m json.tool docs/worklogs/2026-04-29-security-function-review.json >/dev/null && python3 -m json.tool docs/worklogs/2026-04-29-tweet-order-button.json >/dev/null",
+      "result": "通过，既有工作记录 JSON 可解析。"
+    },
+    {
+      "command": "python3 - <<'PY' ... utils security checks ... PY",
+      "result": "通过，URL allowlist 和 HTML 转义基础断言成功。"
+    },
+    {
+      "command": "rg -n \"TWITTER_BEARER_TOKEN=AAAAAAAA|TWITTER_API_KEY=Xc9|TWITTER_API_SECRET=Dfu|TWITTER_ACCESS_TOKEN_SECRET=gpt|requests==2.31.0|schedule==1.2.0|CHECK_INTERVAL=3000\" .env.example README.md VPS_DEPLOY_GUIDE.md deploy_script.sh quick_deploy.sh requirements.txt",
+      "result": "未匹配到旧疑似密钥或过时部署配置。"
+    }
+  ],
+  "knownLimitations": [
+    "未读取或输出 .env、env.txt、damabluechaiENV.txt 的真实内容。",
+    "未清理 Git 历史中的旧密钥；当前只处理工作树和索引，历史清理仍需使用 git filter-repo 或 BFG。",
+    "未连接 Telegram 生产 Bot 或 Twitter/RapidAPI 做真实接口验证。",
+    "未运行 gitleaks 或 pip-audit，因为本地未确认这些工具可用。"
+  ],
+  "deploymentNotes": [
+    "部署前必须先在服务端 .env 中补齐 RAPIDAPI_KEY、TELEGRAM_BOT_TOKEN、TELEGRAM_CHAT_ID、ADMIN_CHAT_ID、ADMIN_USER_IDS。",
+    "如果旧凭据曾经提交过，应先轮换 Twitter/X 和 RapidAPI 相关凭据，再清理 Git 历史。",
+    "部署后重启 telex.service，并检查 Telegram 管理员命令是否由 ADMIN_USER_IDS 中的用户触发成功。"
+  ]
+}

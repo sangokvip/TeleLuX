@@ -87,6 +87,7 @@ class Config:
     TELEGRAM_BOT_TOKEN = None
     TELEGRAM_CHAT_ID = None
     ADMIN_CHAT_ID = None  # bryansuperb 的 Chat ID
+    ADMIN_USER_IDS = []  # 允许使用管理员命令的 Telegram User ID 列表
     ALLOWED_USERNAMES = []  # 允许发送链接的用户名列表
     
     # 监控配置
@@ -111,6 +112,17 @@ class Config:
         cls.TELEGRAM_BOT_TOKEN = cls.get_config('TELEGRAM_BOT_TOKEN', required=True)
         cls.TELEGRAM_CHAT_ID = cls.get_config('TELEGRAM_CHAT_ID', required=True)
         cls.ADMIN_CHAT_ID = cls.get_config('ADMIN_CHAT_ID')  # bryansuperb 的 Chat ID
+
+        admin_ids_str = cls.get_config('ADMIN_USER_IDS', cls.ADMIN_CHAT_ID or '')
+        cls.ADMIN_USER_IDS = []
+        for raw_id in admin_ids_str.split(','):
+            raw_id = raw_id.strip()
+            if not raw_id:
+                continue
+            try:
+                cls.ADMIN_USER_IDS.append(int(raw_id))
+            except ValueError:
+                continue
         
         # 监控配置
         cls.TWITTER_USERNAME = cls.get_config('TWITTER_USERNAME', required=True)  # 要监控的Twitter用户名
@@ -150,8 +162,8 @@ class Config:
         if require_chat_id and not cls.TELEGRAM_CHAT_ID:
             missing.append('TELEGRAM_CHAT_ID')
 
-        if require_admin and not cls.ADMIN_CHAT_ID:
-            missing.append('ADMIN_CHAT_ID')
+        if require_admin and not cls.ADMIN_USER_IDS:
+            missing.append('ADMIN_USER_IDS')
 
         if missing:
             raise ValueError(f"缺少必要的Telegram配置: {', '.join(missing)}")

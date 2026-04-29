@@ -35,16 +35,19 @@ pip install -r requirements.txt
 编辑 `.env` 文件：
 
 ```env
-# Twitter API 配置
-TWITTER_BEARER_TOKEN=your_twitter_bearer_token_here
+# Twitter/X RapidAPI 配置
+RAPIDAPI_KEY=your_rapidapi_key_here
 
 # Telegram 配置
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 TELEGRAM_CHAT_ID=your_telegram_chat_id_here
+ADMIN_CHAT_ID=your_admin_chat_id_here
+ADMIN_USER_IDS=your_admin_user_id_here
 
 # 监控配置
 TWITTER_USERNAME=target_username_without_@
-CHECK_INTERVAL=3000
+CHECK_INTERVAL=28800
+ALLOWED_USERNAMES=mteacherlu,bryansuperb
 ```
 
 ### 4. 运行系统
@@ -120,11 +123,14 @@ python main.py
 
 | 变量名 | 必需 | 说明 | 默认值 |
 |--------|------|------|--------|
-| `TWITTER_BEARER_TOKEN` | ✅ | Twitter API Bearer Token | - |
+| `RAPIDAPI_KEY` | ✅ | RapidAPI twitter241 Key | - |
 | `TELEGRAM_BOT_TOKEN` | ✅ | Telegram机器人Token | - |
 | `TELEGRAM_CHAT_ID` | ✅ | Telegram群组/频道ID | - |
+| `ADMIN_CHAT_ID` | ✅ | 管理员私聊 Chat ID，用于接收通知 | - |
+| `ADMIN_USER_IDS` | ✅ | 管理员 Telegram User ID allowlist | - |
 | `TWITTER_USERNAME` | ✅ | 监控的Twitter用户名 | - |
-| `CHECK_INTERVAL` | ❌ | 检查间隔（秒） | 3000 |
+| `CHECK_INTERVAL` | ❌ | 检查间隔（秒） | 28800 |
+| `ALLOWED_USERNAMES` | ❌ | 允许私聊转发推文链接的用户名列表 | mteacherlu,bryansuperb |
 
 ## 项目结构
 

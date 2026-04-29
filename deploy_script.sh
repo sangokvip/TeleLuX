@@ -28,22 +28,24 @@ cat > requirements.txt << 'EOF'
 python-telegram-bot==20.7
 tweepy==4.14.0
 python-dotenv==1.0.0
-requests==2.31.0
-schedule==1.2.0
+aiohttp==3.9.5
 EOF
 
 # 创建.env文件模板
 cat > .env << 'EOF'
-# Twitter API 配置
-TWITTER_BEARER_TOKEN=your_twitter_bearer_token_here
+# Twitter/X RapidAPI 配置
+RAPIDAPI_KEY=your_rapidapi_key_here
 
 # Telegram 配置
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 TELEGRAM_CHAT_ID=your_telegram_chat_id_here
+ADMIN_CHAT_ID=your_admin_chat_id_here
+ADMIN_USER_IDS=your_admin_user_id_here
 
 # 监控配置
 TWITTER_USERNAME=xiuchiluchu910
-CHECK_INTERVAL=3000
+CHECK_INTERVAL=28800
+ALLOWED_USERNAMES=mteacherlu,bryansuperb
 EOF
 
 # 创建虚拟环境
@@ -76,6 +78,9 @@ Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
 
 [Install]
 WantedBy=multi-user.target

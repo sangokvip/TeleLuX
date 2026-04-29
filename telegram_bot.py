@@ -60,16 +60,19 @@ class TelegramNotifier:
         
         # 转义HTML特殊字符 - 使用utils模块
         tweet_text = utils.escape_html(tweet_text)
-        username = utils.escape_html(username)
+        safe_username = username if utils.is_safe_twitter_username(username) else Config.TWITTER_USERNAME
+        safe_username = safe_username if utils.is_safe_twitter_username(safe_username) else "i"
+        display_username = utils.escape_html(username)
+        safe_tweet_url = tweet_url if utils.is_safe_twitter_url(tweet_url) else f"https://x.com/{safe_username}"
         
         message = f"""
 🐦 <b>新推文提醒</b>
 
-👤 <b>用户:</b> @{username}
+👤 <b>用户:</b> <a href="https://x.com/{safe_username}">@{display_username}</a>
 📝 <b>内容:</b> {tweet_text}
-🕒 <b>时间:</b> {created_at}
+🕒 <b>时间:</b> {utils.escape_html(str(created_at))}
 
-🔗 <a href="{tweet_url}">查看原推文</a>
+🔗 <a href="{safe_tweet_url}">查看原推文</a>
         """.strip()
         
         return message
@@ -214,19 +217,22 @@ class TelegramBotListener:
                     username = Config.TWITTER_USERNAME
                     logger.info(f"群组消息触发，获取 @{username} 的最新推文...")
 
-                    latest_tweets = self.twitter_monitor.get_latest_tweets(username, count=1)
+                    latest_tweets = await self.twitter_monitor.get_latest_tweets(username, count=1)
 
                     if latest_tweets:
                         tweet = latest_tweets[0]
 
                         # 发送最新推文
+                        safe_username = username if utils.is_safe_twitter_username(username) else "i"
+                        safe_tweet_url = tweet.get('url') if utils.is_safe_twitter_url(tweet.get('url')) else f"https://x.com/{safe_username}"
+
                         message = f"""
-🐦 <b>@{username} 的最新推文</b>
+🐦 <b><a href="https://x.com/{safe_username}">@{utils.escape_html(username)}</a> 的最新推文</b>
 
 📝 <b>内容:</b> {utils.escape_html(tweet['text'])}
 🕒 <b>时间:</b> {tweet['created_at'].strftime('%Y-%m-%d %H:%M:%S UTC')}
 
-🔗 <a href="{tweet['url']}">查看原推文</a>
+🔗 <a href="{safe_tweet_url}">查看原推文</a>
                         """.strip()
 
                         await context.bot.send_message(

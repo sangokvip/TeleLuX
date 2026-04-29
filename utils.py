@@ -9,6 +9,7 @@ import logging
 from functools import wraps, partial
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,21 @@ class Utils:
         r'(?:twitter|x)\.com/\w+/status/(\d+)',
         r'/status/(\d+)'
     ]
+
+    SAFE_TWITTER_DOMAINS = {
+        'twitter.com',
+        'www.twitter.com',
+        'x.com',
+        'www.x.com',
+        'mobile.twitter.com'
+    }
+
+    SAFE_MEDIA_DOMAINS = {
+        'pbs.twimg.com',
+        'video.twimg.com',
+        'ton.twimg.com',
+        'abs.twimg.com'
+    }
     
     @staticmethod
     def escape_html(text: str) -> str:
@@ -52,6 +68,38 @@ class Utils:
             return ""
         
         return "".join(Utils.HTML_ESCAPE_TABLE.get(c, c) for c in text)
+
+    @staticmethod
+    def is_safe_url(url: str, allowed_domains: set, require_https: bool = True) -> bool:
+        """校验 URL 是否属于允许的 HTTPS 域名。"""
+        if not url or not isinstance(url, str):
+            return False
+
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            return False
+
+        if require_https and parsed.scheme != 'https':
+            return False
+
+        hostname = (parsed.hostname or '').lower()
+        return hostname in allowed_domains
+
+    @staticmethod
+    def is_safe_twitter_url(url: str) -> bool:
+        """校验 Twitter/X 推文链接是否安全。"""
+        return Utils.is_safe_url(url, Utils.SAFE_TWITTER_DOMAINS)
+
+    @staticmethod
+    def is_safe_twitter_media_url(url: str) -> bool:
+        """校验 Twitter/X 媒体链接是否安全。"""
+        return Utils.is_safe_url(url, Utils.SAFE_MEDIA_DOMAINS)
+
+    @staticmethod
+    def is_safe_twitter_username(username: str) -> bool:
+        """校验 Twitter/X 用户名格式。"""
+        return bool(username and re.fullmatch(r'[A-Za-z0-9_]{1,15}', str(username)))
     
     @staticmethod
     def is_twitter_url(text: str) -> bool:

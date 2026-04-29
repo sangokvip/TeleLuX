@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from config import Config
 from database import Database
+from utils import utils
 
 logger = logging.getLogger(__name__)
 
@@ -239,11 +240,16 @@ class TwitterMonitor:
     async def get_tweet_by_id(self, tweet_id, username=None):
         """根据推文ID获取推文详情 (使用免费的高可用 api.vxtwitter.com 解决直接获取单推文难题)"""
         try:
+            tweet_id = str(tweet_id).strip()
+            if not tweet_id.isdigit():
+                logger.warning(f"非法推文ID，已拒绝请求: {tweet_id}")
+                return None
+
             logger.info(f"尝试通过 VxTwitter 接口获取推文详情: {tweet_id}")
             url = f"https://api.vxtwitter.com/Twitter/status/{tweet_id}"
             
             async with aiohttp.ClientSession() as session:
-                async with session.get(url) as resp:
+                async with session.get(url, timeout=15) as resp:
                     if resp.status != 200:
                         logger.error(f"VxTwitter 未找到推文 {tweet_id}：{resp.status}")
                         return None
@@ -258,14 +264,16 @@ class TwitterMonitor:
                         m_type = m.get('type')
                         m_url = m.get('url')
                         m_thumb = m.get('thumbnail_url')
+                        safe_media_url = m_url if utils.is_safe_twitter_media_url(m_url) else None
+                        safe_thumb_url = m_thumb if utils.is_safe_twitter_media_url(m_thumb) else None
                         
                         media_list.append({
-                            'url': m_url,
+                            'url': safe_media_url,
                             'type': m_type,
-                            'preview_image_url': m_thumb or m_url
+                            'preview_image_url': safe_thumb_url or safe_media_url
                         })
                         if not preview_image_url:
-                            preview_image_url = m_thumb or m_url
+                            preview_image_url = safe_thumb_url or safe_media_url
                     
                     # 提取时间
                     created_at_epoch = data.get('date_epoch')
@@ -275,12 +283,20 @@ class TwitterMonitor:
                         dt = datetime.now(timezone.utc)
                         
                     # 组合与 get_latest_tweets 结构一致的字典
+                    tweet_url = data.get('tweetURL', f"https://twitter.com/i/status/{tweet_id}")
+                    if not utils.is_safe_twitter_url(tweet_url):
+                        tweet_url = f"https://twitter.com/i/status/{tweet_id}"
+
+                    screen_name = data.get('user_screen_name', username or 'Unknown')
+                    if not utils.is_safe_twitter_username(screen_name):
+                        screen_name = username if utils.is_safe_twitter_username(username) else 'Unknown'
+
                     tweet_info = {
                         'id': int(data.get('tweetID', tweet_id)),
                         'text': data.get('text', ''),
                         'created_at': dt,
-                        'url': data.get('tweetURL', f"https://twitter.com/i/status/{tweet_id}"),
-                        'username': data.get('user_screen_name', username or 'Unknown'),
+                        'url': tweet_url,
+                        'username': screen_name,
                         'preview_image_url': preview_image_url,
                         'media': media_list
                     }
@@ -305,15 +321,6 @@ class TwitterMonitor:
                 # 检查是否已经处理过
                 if not self.database.is_tweet_processed(str(tweet['id'])):
                     new_tweets.append(tweet)
-                    
-                    # 标记为已处理
-                    self.database.mark_tweet_processed(
-                        str(tweet['id']),
-                        tweet['username'],
-                        tweet['url'],
-                        tweet['text'],
-                        str(tweet['created_at'])
-                    )
             
             if new_tweets:
                 logger.info(f"发现 {len(new_tweets)} 条新推文")

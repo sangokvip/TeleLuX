@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "worklogId": "2026-04-29-security-function-review",
+  "date": "2026-04-29",
+  "summary": "完成 TeleLuX 项目的安全审查和功能审查，输出问题清单、影响说明和分阶段优化计划。",
+  "trigger": "用户要求对项目做安全审查和功能审查，并提出建议和优化计划。",
+  "changes": [
+    {
+      "category": "审查报告",
+      "files": [
+        "docs/reviews/2026-04-29-security-function-review.md"
+      ],
+      "details": [
+        "记录密钥管理、HTML 输出转义、管理员权限、第三方接口、依赖锁定、部署脚本等安全发现。",
+        "记录备用入口 async 调用、重复机器人入口、推文去重时机、入群验证、黑名单处理、状态持久化等功能和稳定性发现。",
+        "整理 P0/P1/P2 优先级和三阶段优化计划。"
+      ],
+      "reason": "为后续安全加固、功能修复和部署工程化提供可执行依据。"
+    }
+  ],
+  "validation": [
+    {
+      "command": "只读审查：rg、sed、nl、git ls-files、git status",
+      "result": "已定位关键风险点及对应文件行号。"
+    },
+    {
+      "command": "未运行线上 Bot 或真实 Telegram 消息测试",
+      "result": "本次为审查和计划输出，避免影响线上群组。"
+    }
+  ],
+  "knownLimitations": [
+    "未读取 .env、env.txt、damabluechaiENV.txt 的真实内容，避免泄露或输出密钥。",
+    "未执行 gitleaks、pip-audit 等外部扫描工具，报告中的密钥和依赖风险基于代码静态审查。",
+    "未连接 Telegram 或 Twitter/RapidAPI 做真实接口验证。"
+  ],
+  "deploymentNotes": [
+    "本次未改生产业务代码，不需要部署。",
+    "后续如执行 P0 修复，需要先轮换凭据，再清理 Git 历史并重新部署环境变量。"
+  ]
+}
