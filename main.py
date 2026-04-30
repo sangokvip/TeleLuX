@@ -24,7 +24,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-ORDER_BOT_URL = "https://t.me/Lulaoshi_bot"
+ORDER_BOT_URL = "https://t.me/lulaoshishop_bot"
 ORDER_BOT_BUTTON_TEXT = "点击自助下单进群"
 
 class TeleLuXBot:
@@ -189,7 +189,7 @@ class TeleLuXBot:
                         )
                         logger.warning(f"未经授权的业务介绍命令尝试 (来自用户: {user_name}, Chat ID: {chat_id})")
                         return
-                    special_message = """小助理下单机器人： 👉https://t.me/Lulaoshi_bot
+                    special_message = """小助理下单机器人： 👉https://t.me/lulaoshishop_bot
 
 ※平台是自助入群，机器人下单即可。
 
@@ -231,7 +231,7 @@ class TeleLuXBot:
 
                     # 创建内联键盘
                     keyboard = [
-                        [InlineKeyboardButton("👉 点击这里购买/了解价格", url="https://t.me/Lulaoshi_bot")]
+                        [InlineKeyboardButton("👉 点击这里购买/了解价格", url="https://t.me/lulaoshishop_bot")]
                     ]
                     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -488,7 +488,7 @@ class TeleLuXBot:
                     if self.auto_reply_enabled and message_text:
                         for keyword, reply in self.auto_replies.items():
                             if keyword in message_text:
-                                keyboard = [[InlineKeyboardButton("👉 点击这里购买/了解价格", url="https://t.me/Lulaoshi_bot")]]
+                                keyboard = [[InlineKeyboardButton("👉 点击这里购买/了解价格", url="https://t.me/lulaoshishop_bot")]]
                                 reply_markup = InlineKeyboardMarkup(keyboard)
                                 await context.bot.send_message(
                                     chat_id=chat_id,
@@ -544,7 +544,7 @@ class TeleLuXBot:
                 if self.auto_reply_enabled:
                     reply = self._get_auto_reply(message_text)
                     if reply:
-                        keyboard = [[InlineKeyboardButton("👉 点击这里购买/了解价格", url="https://t.me/Lulaoshi_bot")]]
+                        keyboard = [[InlineKeyboardButton("👉 点击这里购买/了解价格", url="https://t.me/lulaoshishop_bot")]]
                         reply_markup = InlineKeyboardMarkup(keyboard)
                         await context.bot.send_message(
                             chat_id=chat_id,
@@ -1055,7 +1055,7 @@ class TeleLuXBot:
         text_lower = text.lower()
         
         # 排除白名单（群主相关链接）
-        whitelist = ['t.me/lulaoshi_bot', 't.me/mteacherlu', '@mteacherlu', 'x.com/xiuchiluchu910',
+        whitelist = ['t.me/lulaoshishop_bot', 't.me/mteacherlu', '@mteacherlu', 'x.com/xiuchiluchu910',
                      'twitter.com/xiuchiluchu910', 'blog.sinovale.com']
         is_whitelisted = any(w in text_lower for w in whitelist)
         if is_whitelisted:
@@ -1376,7 +1376,7 @@ class TeleLuXBot:
 ━━━━━━━━━━━━━━━━━━━━
 
 🛒 <b>下单购买请使用小助理机器人：</b>
-👉 <a href="https://t.me/Lulaoshi_bot">https://t.me/Lulaoshi_bot</a>
+👉 <a href="https://t.me/lulaoshishop_bot">https://t.me/lulaoshishop_bot</a>
 
 ━━━━━━━━━━━━━━━━━━━━
 
@@ -1848,7 +1848,7 @@ class TeleLuXBot:
             # 到达发送时间，构建并发送业务介绍消息
             business_intro_message = """🌟 <b>露老师门槛群介绍</b> 🌟
 
-小助理下单机器人： 👉https://t.me/Lulaoshi_bot
+小助理下单机器人： 👉https://t.me/lulaoshishop_bot
 
 ※平台是自助入群，机器人下单即可。
 
@@ -1875,7 +1875,7 @@ class TeleLuXBot:
 
 <b>定制视频：</b>根据需求定制露老师视频，可SOLO、FM、FF、FFM、FMM，可按要求使用各种玩具和剧情设计。
 
-小助理下单机器人： 👉https://t.me/Lulaoshi_bot
+小助理下单机器人： 👉https://t.me/lulaoshishop_bot
 
 ※希望得到更详细介绍询问请私信"""
 
@@ -1892,7 +1892,7 @@ class TeleLuXBot:
 
             # 创建内联键盘
             keyboard = [
-                [InlineKeyboardButton("👉 点击这里购买/了解价格", url="https://t.me/Lulaoshi_bot")]
+                [InlineKeyboardButton("👉 点击这里购买/了解价格", url="https://t.me/lulaoshishop_bot")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 

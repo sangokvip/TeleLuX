@@ -8,7 +8,7 @@ from utils import utils
 
 logger = logging.getLogger(__name__)
 
-ORDER_BOT_URL = "https://t.me/Lulaoshi_bot"
+ORDER_BOT_URL = "https://t.me/lulaoshishop_bot"
 ORDER_BOT_BUTTON_TEXT = "点击自助下单进群"
 
 class TelegramNotifier:
@@ -154,7 +154,7 @@ class TelegramBotListener:
             if chat_type == 'private':
                 # 检查是否是特定的触发消息"27"
                 if message_text == "27":
-                    special_message = """小助理下单机器人： 👉https://t.me/Lulaoshi_bot
+                    special_message = """小助理下单机器人： 👉https://t.me/lulaoshishop_bot
 
 ※平台是自助入群，机器人下单即可。
 

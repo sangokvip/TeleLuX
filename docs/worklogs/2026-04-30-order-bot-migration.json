@@ -1,0 +1,29 @@
+{
+  "date": "2026-04-30",
+  "topic": "下单机器人用户名迁移",
+  "summary": "将下单机器人从 @Lulaoshi_bot 迁移到 @lulaoshishop_bot",
+  "changes": [
+    {
+      "category": "Bot Migration",
+      "files": ["main.py", "telegram_bot.py"],
+      "description": "全局替换旧下单机器人用户名 Lulaoshi_bot 为 lulaoshishop_bot，共 12 处",
+      "details": [
+        "main.py: ORDER_BOT_URL 常量",
+        "main.py: 4 个 InlineKeyboardButton URL",
+        "main.py: 3 个业务介绍文本中的 URL",
+        "main.py: 欢迎消息中的 HTML 链接",
+        "main.py: 广告检测白名单条目",
+        "telegram_bot.py: ORDER_BOT_URL 常量",
+        "telegram_bot.py: 业务介绍文本中的 URL"
+      ]
+    }
+  ],
+  "validation": {
+    "method": "grep verification",
+    "result": "所有 .py 文件中 Lulaoshi_bot（旧）引用数：0；lulaoshishop_bot（新）引用数：12",
+    "rollback": "git checkout main.py telegram_bot.py"
+  },
+  "knownLimitations": [
+    "docs/ 目录下的工作记录文档保留了历史引用，未修改（属于历史记录，不应篡改）"
+  ]
+}
