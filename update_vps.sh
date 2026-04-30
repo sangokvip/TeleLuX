@@ -18,14 +18,17 @@ sudo systemctl stop telex.service
 
 echo "📥 更新代码..."
 if [ -d ".git" ]; then
-    # 如果是Git仓库，使用git pull
-    git stash
-    git pull origin main
-    git stash pop
+    # 强制同步远程代码，丢弃所有本地修改（.env 已在 .gitignore 中，不受影响）
+    git fetch origin main
+    git reset --hard origin/main
 else
     echo "⚠️  不是Git仓库，请手动上传新文件"
     echo "或者重新克隆仓库"
 fi
+
+echo "🧹 清理Python缓存..."
+find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null
+find . -name "*.pyc" -delete 2>/dev/null
 
 echo "🐍 激活虚拟环境..."
 source venv/bin/activate
