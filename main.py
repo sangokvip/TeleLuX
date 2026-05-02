@@ -1838,10 +1838,7 @@ class TeleLuXBot:
                 if elapsed < 28800:  # 8小时 = 28800秒
                     return
             else:
-                # 首次运行，记录时间但不立即发送，等待8小时后首次发送
-                self.last_business_intro_time = now
-                logger.info("📢 业务介绍定时已初始化，将在8小时后首次发送")
-                return
+                logger.info("📢 业务介绍定时首次运行，将立即发送一次")
 
             # 到达发送时间，构建并发送业务介绍消息
             business_intro_message = """🌟 <b>露老师门槛群介绍</b> 🌟
